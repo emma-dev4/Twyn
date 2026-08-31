@@ -2,11 +2,10 @@
    TWYN — SUPABASE CONNECTION + AUTH
    ========================================================= */
 
-const SUPABASE_URL =
-  "https://zzcyrznqxunmgivpqry1.supabase.co";
+const SUPABASE_URL = "https://zzcyrznqxunmgivpqryi.supabase.co";
+  
 
-const SUPABASE_PUBLISHABLE_KEY =
-  "sb_publishable_e3I2Yv5RX525vbQ_9W_Wpg_0c9vQklI";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_e3I2Yv5RX525vbQ_9W_Wpg_0c9vQklI";
 
 const supabaseClient =
   window.supabase.createClient(
@@ -19,14 +18,45 @@ const supabaseClient =
    SIGN UP
    ========================================================= */
 
-async function twynSignUp(email, password) {
+async function twynSignUp(
+  email,
+  password,
+  name
+) {
 
   try {
 
-    const { data, error } =
+    const username =
+      name
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, "")
+        .slice(0, 20)
+        || "twynuser";
+
+    const {
+      data,
+      error
+    } =
       await supabaseClient.auth.signUp({
+
         email: email,
-        password: password
+
+        password: password,
+
+        options: {
+
+          data: {
+
+            display_name:
+              name,
+
+            username:
+              username
+
+          }
+
+        }
+
       });
 
     if (error) {
@@ -37,16 +67,26 @@ async function twynSignUp(email, password) {
       );
 
       return {
+
         success: false,
-        error: error.message
+
+        error:
+          error.message
+
       };
 
     }
 
     return {
+
       success: true,
-      user: data.user,
-      session: data.session
+
+      user:
+        data.user,
+
+      session:
+        data.session
+
     };
 
   } catch (error) {
@@ -57,9 +97,12 @@ async function twynSignUp(email, password) {
     );
 
     return {
+
       success: false,
+
       error:
         "Could not connect to Twyn. Check your internet connection and Supabase settings."
+
     };
 
   }
@@ -71,14 +114,23 @@ async function twynSignUp(email, password) {
    LOGIN
    ========================================================= */
 
-async function twynLogin(email, password) {
+async function twynLogin(
+  email,
+  password
+) {
 
   try {
 
-    const { data, error } =
+    const {
+      data,
+      error
+    } =
       await supabaseClient.auth.signInWithPassword({
+
         email: email,
+
         password: password
+
       });
 
     if (error) {
@@ -89,16 +141,26 @@ async function twynLogin(email, password) {
       );
 
       return {
+
         success: false,
-        error: error.message
+
+        error:
+          error.message
+
       };
 
     }
 
     return {
+
       success: true,
-      user: data.user,
-      session: data.session
+
+      user:
+        data.user,
+
+      session:
+        data.session
+
     };
 
   } catch (error) {
@@ -109,9 +171,12 @@ async function twynLogin(email, password) {
     );
 
     return {
+
       success: false,
+
       error:
         "Could not connect to Twyn."
+
     };
 
   }
@@ -135,6 +200,11 @@ async function getTwynUser() {
 
     if (error) {
 
+      console.error(
+        "Get Twyn user error:",
+        error
+      );
+
       return null;
 
     }
@@ -144,7 +214,48 @@ async function getTwynUser() {
   } catch (error) {
 
     console.error(
-      "Get Twyn user error:",
+      "Get Twyn user exception:",
+      error
+    );
+
+    return null;
+
+  }
+
+}
+
+
+/* =========================================================
+   GET CURRENT SESSION
+   ========================================================= */
+
+async function getTwynSession() {
+
+  try {
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient.auth.getSession();
+
+    if (error) {
+
+      console.error(
+        "Get Twyn session error:",
+        error
+      );
+
+      return null;
+
+    }
+
+    return data.session || null;
+
+  } catch (error) {
+
+    console.error(
+      "Get Twyn session exception:",
       error
     );
 
@@ -163,20 +274,28 @@ async function twynLogout() {
 
   try {
 
-    const { error } =
+    const {
+      error
+    } =
       await supabaseClient.auth.signOut();
 
     if (error) {
 
       return {
+
         success: false,
-        error: error.message
+
+        error:
+          error.message
+
       };
 
     }
 
     return {
+
       success: true
+
     };
 
   } catch (error) {
@@ -187,8 +306,12 @@ async function twynLogout() {
     );
 
     return {
+
       success: false,
-      error: "Could not log out."
+
+      error:
+        "Could not log out."
+
     };
 
   }
