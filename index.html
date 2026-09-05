@@ -122,7 +122,7 @@
 
     <main class="main-content">
 
-      <!-- HOME -->
+      <!-- HOME (feed + comments open inside posts via JS) -->
       <section class="page active" id="homePage">
         <div class="home-header">
           <div>
@@ -184,12 +184,12 @@
         </div>
       </section>
 
-      <!-- INBOX -->
+      <!-- INBOX: NOTIFICATIONS + MESSAGES -->
       <section class="page" id="inboxPage">
         <div class="page-heading" id="inboxHeading">
           <div>
             <h1>Inbox</h1>
-            <p>Your activity and messages.</p>
+            <p>Likes, comments, follows, saves, and messages.</p>
           </div>
         </div>
 
@@ -198,10 +198,12 @@
           <button class="inbox-tab" data-inbox="messages" type="button">Messages</button>
         </div>
 
+        <!-- NOTIFICATIONS / ACTIVITY -->
         <div class="inbox-panel" id="activityPanel">
           <div class="inbox-list" id="activityList"></div>
         </div>
 
+        <!-- TEXT / MESSAGES -->
         <div class="inbox-panel hidden" id="messagesPanel">
           <div class="messages-layout" id="messagesLayout">
             <div class="conversations-list" id="conversationsList"></div>
@@ -226,7 +228,7 @@
         </div>
       </section>
 
-      <!-- PROFILE -->
+      <!-- OWN PROFILE -->
       <section class="page" id="profilePage">
         <div class="profile-cover" id="profileCover"></div>
         <div class="profile-main">
@@ -262,6 +264,36 @@
             <div id="profileFeed"></div>
           </div>
           <button class="logout-btn" id="logoutBtn" type="button">Log out</button>
+        </div>
+      </section>
+
+      <!-- OTHER USER PROFILE -->
+      <section class="page" id="otherProfilePage">
+        <div class="page-heading" style="margin-bottom: 10px;">
+          <button type="button" id="otherProfileBack" class="edit-profile-btn">← Back</button>
+        </div>
+        <div class="profile-cover" id="otherProfileCover"></div>
+        <div class="profile-main">
+          <div class="profile-top">
+            <div class="avatar profile-avatar" id="otherProfileAvatar">U</div>
+            <div class="profile-actions">
+              <button class="follow-btn" id="otherFollowBtn" type="button">Follow</button>
+              <button class="edit-profile-btn" id="otherMessageBtn" type="button">Message</button>
+            </div>
+          </div>
+          <div class="profile-info">
+            <h1 id="otherProfileName">User</h1>
+            <span id="otherProfileUsername">@user</span>
+            <p id="otherProfileBio"></p>
+          </div>
+          <div class="profile-stats">
+            <div><strong id="otherPostCount">0</strong><span>Posts</span></div>
+            <div><strong id="otherFollowerCount">0</strong><span>Followers</span></div>
+            <div><strong id="otherFollowingCount">0</strong><span>Following</span></div>
+          </div>
+          <div class="profile-posts" style="margin-top: 18px;">
+            <div id="otherProfileFeed"></div>
+          </div>
         </div>
       </section>
 
