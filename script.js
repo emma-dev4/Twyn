@@ -1,6 +1,6 @@
 /* =========================================================
    TWYN — COMPLETE SCRIPT.JS
-   V16 — Verified + Cover + Light mode
+   V17 — Profiles + Notifs (follow/save/message) + Comments + Chat
    ========================================================= */
 
 let authMode = "signup";
@@ -43,7 +43,8 @@ const state = {
   openReplies: new Set(),
   feedPage: 0,
   feedHasMore: true,
-  isLoadingMore: false
+  isLoadingMore: false,
+  viewingUserId: null
 };
 
 const TWYN_CATEGORIES = [
@@ -406,6 +407,190 @@ function updateProfileUI() {
   if (editBio) editBio.value = bio;
 }
 
+
+/* ========== OTHER USER PROFILE ========== */
+async function openUserProfile(userId) {
+  if (!userId || !currentUser) return;
+  if (String(userId) === String(currentUser.id)) {
+    document.querySelector('[data-page="profilePage"]')?.click();
+    return;
+  }
+
+  state.viewingUserId = userId;
+  closeChatUI();
+
+  document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
+  document.getElementById("otherProfilePage")?.classList.add("active");
+  document.querySelectorAll(".nav-item").forEach((n) => n.classList.remove("active"));
+
+  const nameEl = document.getElementById("otherProfileName");
+  const userEl = document.getElementById("otherProfileUsername");
+  const bioEl = document.getElementById("otherProfileBio");
+  const avatarEl = document.getElementById("otherProfileAvatar");
+  const coverEl = document.getElementById("otherProfileCover");
+  const feedEl = document.getElementById("otherProfileFeed");
+  const followBtn = document.getElementById("otherFollowBtn");
+
+  if (feedEl) feedEl.innerHTML = `<div class="empty-state"><span>Loading profile...</span></div>`;
+
+  const { data: profile, error } = await supabaseClient
+    .from("profiles")
+    .select("id, username, display_name, bio, avatar_url, cover_url, is_verified")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error || !profile) {
+    if (feedEl) {
+      feedEl.innerHTML = `<div class="empty-state"><strong>User not found</strong><span>This profile may not exist.</span></div>`;
+    }
+    return;
+  }
+
+  const name = profile.display_name || "Twyn User";
+  const username = profile.username || "user";
+
+  if (nameEl) nameEl.innerHTML = `${escapeHTML(name)}${verifiedBadge(!!profile.is_verified)}`;
+  if (userEl) userEl.textContent = `@${username}`;
+  if (bioEl) bioEl.textContent = profile.bio || "";
+
+  if (avatarEl) {
+    if (profile.avatar_url) {
+      avatarEl.innerHTML = `<img src="${escapeAttribute(profile.avatar_url)}" alt="">`;
+    } else {
+      avatarEl.textContent = name.charAt(0).toUpperCase();
+    }
+  }
+
+  if (coverEl) {
+    if (profile.cover_url) {
+      coverEl.classList.add("has-image");
+      coverEl.innerHTML = `<img src="${escapeAttribute(profile.cover_url)}" alt="Cover">`;
+    } else {
+      coverEl.classList.remove("has-image");
+      coverEl.innerHTML = "";
+    }
+  }
+
+  let person = state.people.find((p) => String(p.id) === String(userId));
+  let isFollowing = person ? person.following : false;
+  if (!person) {
+    const { data: frow } = await supabaseClient
+      .from("follows")
+      .select("id")
+      .eq("follower_id", currentUser.id)
+      .eq("following_id", userId)
+      .maybeSingle();
+    isFollowing = !!frow;
+  }
+
+  if (followBtn) {
+    followBtn.textContent = isFollowing ? "Following" : "Follow";
+    followBtn.classList.toggle("following", isFollowing);
+    followBtn.onclick = async () => {
+      followBtn.disabled = true;
+      try {
+        if (isFollowing) {
+          await supabaseClient.from("follows").delete().eq("follower_id", currentUser.id).eq("following_id", userId);
+          isFollowing = false;
+          if (person) person.following = false;
+        } else {
+          await supabaseClient.from("follows").insert({ follower_id: currentUser.id, following_id: userId });
+          isFollowing = true;
+          if (person) person.following = true;
+        }
+        followBtn.textContent = isFollowing ? "Following" : "Follow";
+        followBtn.classList.toggle("following", isFollowing);
+        await loadFollowers();
+        await loadFollowCounts();
+        await loadPeople();
+      } catch (err) {
+        alert(err.message || "Unable to follow");
+      } finally {
+        followBtn.disabled = false;
+      }
+    };
+  }
+
+  const msgBtn = document.getElementById("otherMessageBtn");
+  if (msgBtn) {
+    msgBtn.onclick = () => {
+      document.querySelector('[data-page="inboxPage"]')?.click();
+      document.querySelector('[data-inbox="messages"]')?.click();
+      setTimeout(() => openChat(userId), 200);
+    };
+  }
+
+  const { count: postCount } = await supabaseClient
+    .from("posts")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId);
+  const { count: followers } = await supabaseClient
+    .from("follows")
+    .select("*", { count: "exact", head: true })
+    .eq("following_id", userId);
+  const { count: following } = await supabaseClient
+    .from("follows")
+    .select("*", { count: "exact", head: true })
+    .eq("follower_id", userId);
+
+  const pc = document.getElementById("otherPostCount");
+  const fc = document.getElementById("otherFollowerCount");
+  const fg = document.getElementById("otherFollowingCount");
+  if (pc) pc.textContent = postCount || 0;
+  if (fc) fc.textContent = followers || 0;
+  if (fg) fg.textContent = following || 0;
+
+  const { data: posts } = await supabaseClient
+    .from("posts")
+    .select("id, user_id, content, image_url, world, created_at, likes(user_id), comments(id), saved_posts(user_id)")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  if (!feedEl) return;
+  feedEl.innerHTML = "";
+  if (!posts || !posts.length) {
+    feedEl.innerHTML = `<div class="empty-state"><strong>No posts yet</strong><span>This user hasn't posted anything.</span></div>`;
+    return;
+  }
+
+  posts.forEach((post) => {
+    const likes = post.likes || [];
+    const comments = post.comments || [];
+    const saved = post.saved_posts || [];
+    const item = {
+      id: post.id,
+      userId: post.user_id,
+      user: name,
+      username,
+      avatar: name.charAt(0).toUpperCase(),
+      avatarUrl: profile.avatar_url || null,
+      isVerified: !!profile.is_verified,
+      text: post.content || "",
+      image: post.image_url || null,
+      world: post.world || "general",
+      likes: likes.length,
+      comments: comments.length,
+      commentData: [],
+      shares: 0,
+      saves: saved.length,
+      reach: 0,
+      liked: likes.some((l) => l.user_id === currentUser.id),
+      saved: saved.some((s) => s.user_id === currentUser.id),
+      time: formatPostTime(post.created_at)
+    };
+    if (!state.posts.some((p) => String(p.id) === String(item.id))) {
+      state.posts.push(item);
+    }
+    feedEl.appendChild(createPostElement(item));
+  });
+}
+
+document.getElementById("otherProfileBack")?.addEventListener("click", () => {
+  state.viewingUserId = null;
+  document.querySelector('[data-page="homePage"]')?.click();
+});
+
 /* ========== LOAD EVERYTHING ========== */
 async function loadTwynData() {
   loadSettingsFromStorage();
@@ -689,6 +874,14 @@ function createPostElement(post) {
       </div>
     </div>
   `;
+
+  const userInfo = article.querySelector(".user-info");
+  if (userInfo) {
+    userInfo.addEventListener("click", (e) => {
+      if (e.target.closest(".post-menu")) return;
+      openUserProfile(post.userId);
+    });
+  }
   return article;
 }
 
@@ -755,8 +948,7 @@ function renderSingleComment(comment, post, allComments) {
 }
 
 /* ========== FEED CLICK HANDLER ========== */
-if (feed) {
-  feed.addEventListener("click", async (event) => {
+async function handlePostClick(event) {
     const button = event.target.closest("[data-action]");
     if (!button) return;
 
@@ -865,17 +1057,11 @@ if (feed) {
       const target = state.posts.find((p) => String(p.id) === String(button.dataset.postId));
       if (target) await submitReply(target, button.dataset.commentId, button);
     }
-  });
 }
 
-if (profileFeed) {
-  profileFeed.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-action='menu']");
-    if (!button) return;
-    const post = state.posts.find((p) => String(p.id) === String(button.dataset.id));
-    if (post) openPostMenu(post);
-  });
-}
+if (feed) feed.addEventListener("click", handlePostClick);
+if (profileFeed) profileFeed.addEventListener("click", handlePostClick);
+document.getElementById("otherProfileFeed")?.addEventListener("click", handlePostClick);
 
 async function loadPostComments(post) {
   const { data, error } = await supabaseClient
@@ -1362,7 +1548,10 @@ function renderFriends(type = "followers") {
       <button class="follow-btn ${person.following ? "following" : ""}" type="button">
         ${person.following ? "Following" : "Follow"}
       </button>`;
+    card.querySelector(".avatar")?.addEventListener("click", () => openUserProfile(person.id));
+    card.querySelector(".person-info")?.addEventListener("click", () => openUserProfile(person.id));
     card.querySelector(".follow-btn")?.addEventListener("click", async (e) => {
+      e.stopPropagation();
       if (!currentUser) return;
       e.target.disabled = true;
       try {
@@ -1569,7 +1758,10 @@ document.getElementById("searchInput")?.addEventListener("input", (e) => {
         <strong>${escapeHTML(p.name)}${verifiedBadge(p.isVerified)}</strong>
         <span>@${escapeHTML(p.username)}</span>
       </div>`;
-    el.addEventListener("click", () => searchPanel?.classList.add("hidden"));
+    el.addEventListener("click", () => {
+      searchPanel?.classList.add("hidden");
+      openUserProfile(p.id);
+    });
     results.appendChild(el);
   });
 });
@@ -1583,64 +1775,140 @@ async function loadNotifications() {
     return;
   }
 
+  const notifs = [];
   const myIds = state.posts
     .filter((p) => String(p.userId) === String(currentUser.id))
     .map((p) => p.id);
 
-  if (!myIds.length) {
-    state.notifications = [];
-    updateNotificationBadge();
-    renderInbox();
-    return;
+  // Likes on my posts
+  if (myIds.length && state.settings.notifLikes) {
+    try {
+      const { data: likes } = await supabaseClient
+        .from("likes")
+        .select(`id, user_id, post_id, created_at, profiles!user_id (username, display_name, avatar_url)`)
+        .in("post_id", myIds)
+        .neq("user_id", currentUser.id)
+        .order("created_at", { ascending: false })
+        .limit(30);
+      (likes || []).forEach((l) => {
+        notifs.push({
+          id: `like-${l.id}`,
+          type: "like",
+          user: l.profiles?.display_name || "Someone",
+          postId: l.post_id,
+          userId: l.user_id,
+          time: formatPostTime(l.created_at),
+          created_at: l.created_at
+        });
+      });
+    } catch (e) {
+      console.error("notif likes", e);
+    }
   }
 
-  const notifs = [];
+  // Comments on my posts
+  if (myIds.length && state.settings.notifComments) {
+    try {
+      const { data: comments } = await supabaseClient
+        .from("comments")
+        .select(`id, user_id, post_id, content, created_at, profiles!user_id (username, display_name, avatar_url)`)
+        .in("post_id", myIds)
+        .neq("user_id", currentUser.id)
+        .order("created_at", { ascending: false })
+        .limit(30);
+      (comments || []).forEach((c) => {
+        notifs.push({
+          id: `comment-${c.id}`,
+          type: "comment",
+          user: c.profiles?.display_name || "Someone",
+          text: c.content,
+          postId: c.post_id,
+          userId: c.user_id,
+          time: formatPostTime(c.created_at),
+          created_at: c.created_at
+        });
+      });
+    } catch (e) {
+      console.error("notif comments", e);
+    }
+  }
 
+  // New followers
   try {
-    const { data: likes } = await supabaseClient
-      .from("likes")
-      .select(`id, user_id, post_id, created_at, profiles!user_id (username, display_name, avatar_url)`)
-      .in("post_id", myIds)
-      .neq("user_id", currentUser.id)
+    const { data: follows } = await supabaseClient
+      .from("follows")
+      .select(`id, follower_id, created_at, profiles!follower_id (display_name)`)
+      .eq("following_id", currentUser.id)
       .order("created_at", { ascending: false })
-      .limit(40);
-    (likes || []).forEach((l) => {
-      if (!state.settings.notifLikes) return;
+      .limit(30);
+    (follows || []).forEach((f) => {
       notifs.push({
-        id: `like-${l.id}`,
-        type: "like",
-        user: l.profiles?.display_name || "Someone",
-        postId: l.post_id,
-        time: formatPostTime(l.created_at),
-        created_at: l.created_at
+        id: `follow-${f.id}`,
+        type: "follow",
+        user: f.profiles?.display_name || "Someone",
+        userId: f.follower_id,
+        time: formatPostTime(f.created_at),
+        created_at: f.created_at
       });
     });
-  } catch {}
+  } catch (e) {
+    console.error("notif follows", e);
+  }
 
+  // Saves on my posts
+  if (myIds.length) {
+    try {
+      const { data: saves } = await supabaseClient
+        .from("saved_posts")
+        .select(`id, user_id, post_id, created_at, profiles!user_id (display_name)`)
+        .in("post_id", myIds)
+        .neq("user_id", currentUser.id)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      (saves || []).forEach((s) => {
+        notifs.push({
+          id: `save-${s.id}`,
+          type: "save",
+          user: s.profiles?.display_name || "Someone",
+          postId: s.post_id,
+          userId: s.user_id,
+          time: formatPostTime(s.created_at),
+          created_at: s.created_at
+        });
+      });
+    } catch (e) {
+      console.error("notif saves", e);
+    }
+  }
+
+  // Messages received
   try {
-    const { data: comments } = await supabaseClient
-      .from("comments")
-      .select(`id, user_id, post_id, content, created_at, profiles!user_id (username, display_name, avatar_url)`)
-      .in("post_id", myIds)
-      .neq("user_id", currentUser.id)
+    const { data: msgs } = await supabaseClient
+      .from("messages")
+      .select(`id, sender_id, content, media_type, created_at, profiles!sender_id (display_name)`)
+      .eq("receiver_id", currentUser.id)
       .order("created_at", { ascending: false })
-      .limit(40);
-    (comments || []).forEach((c) => {
-      if (!state.settings.notifComments) return;
+      .limit(30);
+    (msgs || []).forEach((m) => {
+      let preview = m.content || "";
+      if (m.media_type === "image") preview = "Sent a photo";
+      if (m.media_type === "audio") preview = "Sent a voice note";
       notifs.push({
-        id: `comment-${c.id}`,
-        type: "comment",
-        user: c.profiles?.display_name || "Someone",
-        text: c.content,
-        postId: c.post_id,
-        time: formatPostTime(c.created_at),
-        created_at: c.created_at
+        id: `msg-${m.id}`,
+        type: "message",
+        user: m.profiles?.display_name || "Someone",
+        text: preview,
+        userId: m.sender_id,
+        time: formatPostTime(m.created_at),
+        created_at: m.created_at
       });
     });
-  } catch {}
+  } catch (e) {
+    console.error("notif messages", e);
+  }
 
   notifs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  state.notifications = notifs.slice(0, 50);
+  state.notifications = notifs.slice(0, 60);
   updateNotificationBadge();
   renderInbox();
 }
@@ -1661,25 +1929,56 @@ function renderInbox() {
       <div class="empty-state">
         <div class="empty-icon">🔔</div>
         <strong>No activity yet</strong>
-        <span>When someone likes or comments on your posts, it will show up here.</span>
+        <span>Likes, comments, follows, saves, and messages will show up here.</span>
       </div>`;
     return;
   }
   list.innerHTML = state.notifications
     .map((n) => {
-      const icon = n.type === "like" ? "♥" : "💬";
-      const cls = n.type === "like" ? "like-icon" : "comment-icon";
-      const text =
-        n.type === "like"
-          ? `<strong>${escapeHTML(n.user)}</strong> liked your post`
-          : `<strong>${escapeHTML(n.user)}</strong> commented: “${escapeHTML((n.text || "").slice(0, 55))}${(n.text || "").length > 55 ? "…" : ""}”`;
+      let icon = "🔔";
+      let cls = "";
+      let text = "";
+      if (n.type === "like") {
+        icon = "♥";
+        cls = "like-icon";
+        text = `<strong>${escapeHTML(n.user)}</strong> liked your post`;
+      } else if (n.type === "comment") {
+        icon = "💬";
+        cls = "comment-icon";
+        text = `<strong>${escapeHTML(n.user)}</strong> commented: “${escapeHTML((n.text || "").slice(0, 55))}${(n.text || "").length > 55 ? "…" : ""}”`;
+      } else if (n.type === "follow") {
+        icon = "👤";
+        text = `<strong>${escapeHTML(n.user)}</strong> started following you`;
+      } else if (n.type === "save") {
+        icon = "🔖";
+        text = `<strong>${escapeHTML(n.user)}</strong> saved your post`;
+      } else if (n.type === "message") {
+        icon = "✉️";
+        text = `<strong>${escapeHTML(n.user)}</strong> sent you a message${n.text ? `: “${escapeHTML(String(n.text).slice(0, 40))}”` : ""}`;
+      }
       return `
-        <div class="notification">
+        <div class="notification" data-notif-type="${escapeAttribute(n.type)}" data-user-id="${escapeAttribute(n.userId || "")}" data-post-id="${escapeAttribute(n.postId || "")}">
           <div class="notification-icon ${cls}">${icon}</div>
           <div>${text}<span>${escapeHTML(n.time)}</span></div>
         </div>`;
     })
     .join("");
+
+  list.querySelectorAll(".notification").forEach((el) => {
+    el.addEventListener("click", () => {
+      const type = el.dataset.notifType;
+      const userId = el.dataset.userId;
+      if (type === "message" && userId) {
+        document.querySelector('[data-page="inboxPage"]')?.click();
+        document.querySelector('[data-inbox="messages"]')?.click();
+        setTimeout(() => openChat(userId), 150);
+      } else if (type === "follow" && userId) {
+        openUserProfile(userId);
+      } else if (userId) {
+        openUserProfile(userId);
+      }
+    });
+  });
 }
 
 /* ========== INBOX TABS ========== */
@@ -1811,8 +2110,30 @@ function closeChatUI() {
 
 async function openChat(userId) {
   activeChatUserId = userId;
-  const person = state.people.find((p) => String(p.id) === String(userId));
-  if (!person) return;
+  let person = state.people.find((p) => String(p.id) === String(userId));
+  if (!person) {
+    try {
+      const { data: p } = await supabaseClient
+        .from("profiles")
+        .select("id, username, display_name, avatar_url, is_verified")
+        .eq("id", userId)
+        .maybeSingle();
+      if (!p) return;
+      const name = p.display_name || "Twyn User";
+      person = {
+        id: p.id,
+        name,
+        username: p.username || "user",
+        avatar: name.charAt(0).toUpperCase(),
+        avatarUrl: p.avatar_url || null,
+        isVerified: !!p.is_verified,
+        following: false
+      };
+      state.people.push(person);
+    } catch {
+      return;
+    }
+  }
 
   openChatUI();
 
@@ -2254,6 +2575,9 @@ function handleRealtimeMessage(payload) {
   loadConversations().then(() => {
     if (!activeChatUserId) renderConversations();
   });
+  if (msg.receiver_id === currentUser?.id) {
+    loadNotifications();
+  }
 }
 
 /* ========== LOGOUT ========== */
