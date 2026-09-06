@@ -1,4 +1,6 @@
-const CACHE = "twyn-v2";
+/* Twyn service worker — cache + web push */
+const CACHE = "twyn-v3";
+
 const ASSETS = [
   "./",
   "./index.html",
@@ -12,21 +14,34 @@ const ASSETS = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches
+      .open(CACHE)
+      .then((cache) => cache.addAll(ASSETS))
+      .then(() => self.skipWaiting())
+      .catch((err) => console.log("SW install cache error:", err))
   );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+      )
+      .then(() => self.clients.claim())
   );
 });
 
 self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  if (req.method !== "GET") return;
+
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+    caches.match(req).then((cached) => {
+      if (cached) return cached;
+      return fetch(req).catch(() => caches.match("./index.html"));
+    })
   );
 });
 
@@ -43,10 +58,10 @@ self.addEventListener("push", (event) => {
       const parsed = event.data.json();
       data = { ...data, ...parsed };
     }
-  } catch {
+  } catch (_) {
     try {
-      data.body = event.data.text();
-    } catch {}
+      if (event.data) data.body = event.data.text();
+    } catch (_) {}
   }
 
   event.waitUntil(
@@ -55,24 +70,31 @@ self.addEventListener("push", (event) => {
       icon: "./icons/icon-192.png",
       badge: "./icons/icon-192.png",
       data: { url: data.url || "./" },
-      vibrate: [100, 50, 100]
+      vibrate: [120, 60, 120]
     })
   );
 });
 
+/* ========== CLICK NOTIFICATION ========== */
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || "./";
+  const targetUrl = event.notification.data?.url || "./";
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       for (const client of list) {
         if ("focus" in client) {
-          client.navigate(url);
+          if (client.url && "navigate" in client) {
+            try {
+              client.navigate(targetUrl);
+            } catch (_) {}
+          }
           return client.focus();
         }
       }
-      if (clients.openWindow) return clients.openWindow(url);
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
     })
   );
 });
