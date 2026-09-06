@@ -1,6 +1,6 @@
 /* =========================================================
    TWYN — COMPLETE SCRIPT.JS
-   V20 — Push connected (like/comment/follow/message/save)
+   V21 — Unread + seen + collapsible replies + delete comments + other-profile comments
    ========================================================= */
 
 let authMode = "signup";
@@ -41,6 +41,7 @@ const state = {
   activeCategory: "typ",
   openComments: new Set(),
   openReplies: new Set(),
+  openReplyThreads: new Set(),
   feedPage: 0,
   feedHasMore: true,
   isLoadingMore: false,
@@ -738,10 +739,19 @@ async function openUserProfile(userId) {
       saved: saved.some((s) => s.user_id === currentUser.id),
       time: formatPostTime(post.created_at)
     };
-    if (!state.posts.some((p) => String(p.id) === String(item.id))) {
+    const existingIdx = state.posts.findIndex((p) => String(p.id) === String(item.id));
+    if (existingIdx === -1) {
       state.posts.push(item);
+    } else {
+      const prev = state.posts[existingIdx];
+      state.posts[existingIdx] = {
+        ...prev,
+        ...item,
+        commentData: prev.commentData || []
+      };
     }
-    feedEl.appendChild(createPostElement(item));
+    const live = state.posts.find((p) => String(p.id) === String(item.id)) || item;
+    feedEl.appendChild(createPostElement(live));
   });
 }
 
@@ -1048,6 +1058,23 @@ function getCategoryName(id) {
   return TWYN_CATEGORIES.find((c) => c.id === id)?.name || "TYP";
 }
 
+function refreshPostViews() {
+  renderFeed();
+  renderProfile();
+  if (state.viewingUserId) {
+    const feedEl = document.getElementById("otherProfileFeed");
+    if (!feedEl) return;
+    const posts = state.posts.filter((p) => String(p.userId) === String(state.viewingUserId));
+    feedEl.innerHTML = "";
+    if (!posts.length) {
+      feedEl.innerHTML = `<div class="empty-state"><strong>No posts yet</strong><span>This user hasn't posted anything.</span></div>`;
+      return;
+    }
+    posts.forEach((p) => feedEl.appendChild(createPostElement(p)));
+  }
+}
+
+
 /* ========== COMMENTS ========== */
 function renderCommentsHTML(post) {
   const comments = post.commentData || [];
@@ -1060,7 +1087,7 @@ function renderCommentsHTML(post) {
     .join("");
 }
 
-function renderSingleComment(comment, post, allComments) {
+function renderSingleComment(comment, post, allComments, depth = 0) {
   const profile = comment.profiles || {};
   const name = profile.display_name || "Twyn User";
   const username = profile.username || "twynuser";
@@ -1070,17 +1097,46 @@ function renderSingleComment(comment, post, allComments) {
   const likedByMe = likes.some((l) => l.user_id === currentUser?.id);
   const replies = allComments.filter((c) => String(c.parent_id) === String(comment.id));
   const replyKey = `reply-${comment.id}`;
+  const threadKey = `thread-${comment.id}`;
+  const isMine = currentUser && String(comment.user_id) === String(currentUser.id);
+  const repliesOpen = state.openReplyThreads.has(threadKey);
+
+  const deleteBtn = isMine
+    ? `<button class="comment-delete-btn" data-action="delete-comment" data-comment-id="${escapeAttribute(comment.id)}" data-post-id="${escapeAttribute(post.id)}" type="button">Delete</button>`
+    : "";
+
+  let repliesBlock = "";
+  if (replies.length && depth === 0) {
+    repliesBlock = `<button type="button" class="replies-toggle" data-action="toggle-replies" data-comment-id="${escapeAttribute(comment.id)}">
+          ${repliesOpen ? "Hide" : "View"} ${replies.length} ${replies.length === 1 ? "reply" : "replies"}
+        </button>
+        <div class="replies ${repliesOpen ? "" : "collapsed"}" data-replies-for="${escapeAttribute(comment.id)}">
+          ${replies
+            .slice()
+            .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+            .map((r) => renderSingleComment(r, post, allComments, depth + 1))
+            .join("")}
+        </div>`;
+  } else if (replies.length) {
+    repliesBlock = `<div class="replies">
+            ${replies
+              .slice()
+              .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+              .map((r) => renderSingleComment(r, post, allComments, depth + 1))
+              .join("")}
+          </div>`;
+  }
 
   return `
     <div class="comment" data-comment-id="${escapeAttribute(comment.id)}">
-      <div class="comment-avatar">
+      <div class="comment-avatar" data-action="open-profile" data-user-id="${escapeAttribute(comment.user_id || "")}">
         ${profile.avatar_url
           ? `<img src="${escapeAttribute(profile.avatar_url)}" alt="${escapeAttribute(name)}">`
           : escapeHTML(avatar)}
       </div>
       <div class="comment-body">
         <div class="comment-author">
-          <strong>${escapeHTML(name)}${verifiedBadge(isVerified)}</strong>
+          <strong data-action="open-profile" data-user-id="${escapeAttribute(comment.user_id || "")}">${escapeHTML(name)}${verifiedBadge(isVerified)}</strong>
           <span>@${escapeHTML(username)}</span>
         </div>
         <div class="comment-text">${escapeHTML(comment.content)}</div>
@@ -1090,21 +1146,18 @@ function renderSingleComment(comment, post, allComments) {
             ${likedByMe ? "♥" : "♡"} ${likes.length || ""}
           </button>
           <button class="comment-reply-btn" data-action="toggle-reply" data-comment-id="${escapeAttribute(comment.id)}" data-post-id="${escapeAttribute(post.id)}" type="button">Reply</button>
+          ${deleteBtn}
         </div>
         <div class="reply-form ${state.openReplies.has(replyKey) ? "" : "hidden"}">
           <input type="text" class="reply-input" placeholder="Write a reply..." maxlength="500" data-reply-input="${escapeAttribute(comment.id)}">
           <button type="button" class="reply-submit" data-action="submit-reply" data-comment-id="${escapeAttribute(comment.id)}" data-post-id="${escapeAttribute(post.id)}">Reply</button>
         </div>
-        ${replies.length
-          ? `<div class="replies">${replies
-              .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-              .map((r) => renderSingleComment(r, post, allComments))
-              .join("")}</div>`
-          : ""}
+        ${repliesBlock}
       </div>
     </div>
   `;
 }
+
 
 /* ========== FEED CLICK HANDLER ========== */
 async function handlePostClick(event) {
@@ -1154,7 +1207,7 @@ async function handlePostClick(event) {
         state.openComments.add(key);
         await loadPostComments(post);
       }
-      renderFeed();
+      refreshPostViews();
       return;
     }
 
@@ -1222,7 +1275,27 @@ async function handlePostClick(event) {
       const key = `reply-${button.dataset.commentId}`;
       if (state.openReplies.has(key)) state.openReplies.delete(key);
       else state.openReplies.add(key);
-      renderFeed();
+      refreshPostViews();
+      return;
+    }
+
+    if (action === "toggle-replies") {
+      const key = `thread-${button.dataset.commentId}`;
+      if (state.openReplyThreads.has(key)) state.openReplyThreads.delete(key);
+      else state.openReplyThreads.add(key);
+      refreshPostViews();
+      return;
+    }
+
+    if (action === "delete-comment") {
+      const target = state.posts.find((p) => String(p.id) === String(button.dataset.postId));
+      if (target) await deleteComment(target, button.dataset.commentId);
+      return;
+    }
+
+    if (action === "open-profile") {
+      const uid = button.dataset.userId;
+      if (uid) openUserProfile(uid);
       return;
     }
 
@@ -1283,7 +1356,7 @@ async function submitComment(post, button) {
     post.comments = post.commentData.length;
     state.openComments.add(String(post.id));
     input.value = "";
-    renderFeed();
+    refreshPostViews();
     await loadNotifications();
     if (post.userId && String(post.userId) !== String(currentUser.id)) {
       sendPushToUser(
@@ -1297,6 +1370,36 @@ async function submitComment(post, button) {
   } finally {
     button.disabled = false;
     button.textContent = "Post";
+  }
+}
+
+async function deleteComment(post, commentId) {
+  if (!currentUser) return alert("Please log in first.");
+  if (!confirm("Delete this comment?")) return;
+  try {
+    const { error } = await supabaseClient
+      .from("comments")
+      .delete()
+      .eq("id", commentId)
+      .eq("user_id", currentUser.id);
+    if (error) throw error;
+
+    const removeIds = new Set([String(commentId)]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      (post.commentData || []).forEach((c) => {
+        if (c.parent_id && removeIds.has(String(c.parent_id)) && !removeIds.has(String(c.id))) {
+          removeIds.add(String(c.id));
+          changed = true;
+        }
+      });
+    }
+    post.commentData = (post.commentData || []).filter((c) => !removeIds.has(String(c.id)));
+    post.comments = (post.commentData || []).filter((c) => !c.parent_id).length;
+    refreshPostViews();
+  } catch (err) {
+    alert(err.message || "Unable to delete comment");
   }
 }
 
@@ -1319,7 +1422,7 @@ async function toggleCommentLike(post, commentId, button) {
     if (already) comment.likes = comment.likes.filter((l) => l.user_id !== currentUser.id);
     else comment.likes.push({ user_id: currentUser.id });
   }
-  renderFeed();
+  refreshPostViews();
   button.disabled = false;
 }
 
@@ -1356,9 +1459,10 @@ async function submitReply(post, parentId, button) {
     post.commentData.push(data);
     post.comments = post.commentData.length;
     state.openReplies.delete(`reply-${parentId}`);
+    state.openReplyThreads.add(`thread-${parentId}`);
     state.openComments.add(String(post.id));
     input.value = "";
-    renderFeed();
+    refreshPostViews();
     await loadNotifications();
   } catch (err) {
     alert(err.message || "Unable to reply");
@@ -2098,10 +2202,39 @@ async function loadNotifications() {
   renderInbox();
 }
 
+function getLastActivitySeenAt() {
+  if (state.lastActivitySeenAt) return state.lastActivitySeenAt;
+  try {
+    const raw = localStorage.getItem("twyn_last_activity_seen");
+    if (raw) state.lastActivitySeenAt = raw;
+  } catch {}
+  return state.lastActivitySeenAt || null;
+}
+
+function markActivityAsSeen() {
+  const now = new Date().toISOString();
+  state.lastActivitySeenAt = now;
+  try {
+    localStorage.setItem("twyn_last_activity_seen", now);
+  } catch {}
+  updateNotificationBadge();
+  renderInbox();
+}
+
+function getUnreadActivityCount() {
+  const seen = getLastActivitySeenAt();
+  if (!seen) return (state.notifications || []).length;
+  const seenTime = new Date(seen).getTime();
+  return (state.notifications || []).filter((n) => {
+    const t = new Date(n.created_at || 0).getTime();
+    return t > seenTime;
+  }).length;
+}
+
 function updateNotificationBadge() {
-  const badge = document.querySelector(".notification-badge");
+  const badge = document.querySelector(".notification-badge") || document.getElementById("inboxBadge");
   if (!badge) return;
-  const count = state.notifications.length;
+  const count = getUnreadActivityCount();
   badge.textContent = count > 99 ? "99+" : String(count);
   badge.style.display = count > 0 ? "grid" : "none";
 }
@@ -2118,6 +2251,10 @@ function renderInbox() {
       </div>`;
     return;
   }
+
+  const seen = getLastActivitySeenAt();
+  const seenTime = seen ? new Date(seen).getTime() : 0;
+
   list.innerHTML = state.notifications
     .map((n) => {
       let icon = "🔔";
@@ -2141,8 +2278,10 @@ function renderInbox() {
         icon = "✉️";
         text = `<strong>${escapeHTML(n.user)}</strong> sent you a message${n.text ? `: “${escapeHTML(String(n.text).slice(0, 40))}”` : ""}`;
       }
+      const t = new Date(n.created_at || 0).getTime();
+      const isUnread = !seen || t > seenTime;
       return `
-        <div class="notification" data-notif-type="${escapeAttribute(n.type)}" data-user-id="${escapeAttribute(n.userId || "")}" data-post-id="${escapeAttribute(n.postId || "")}">
+        <div class="notification ${isUnread ? "unread" : ""}" data-notif-type="${escapeAttribute(n.type)}" data-user-id="${escapeAttribute(n.userId || "")}" data-post-id="${escapeAttribute(n.postId || "")}">
           <div class="notification-icon ${cls}">${icon}</div>
           <div>${text}<span>${escapeHTML(n.time)}</span></div>
         </div>`;
@@ -2349,6 +2488,23 @@ async function openChat(userId) {
   } catch {
     if (!state.messages[userId]) state.messages[userId] = [];
   }
+
+  // Mark their messages as seen
+  try {
+    const now = new Date().toISOString();
+    await supabaseClient
+      .from("messages")
+      .update({ seen_at: now })
+      .eq("sender_id", userId)
+      .eq("receiver_id", currentUser.id)
+      .is("seen_at", null);
+    (state.messages[userId] || []).forEach((m) => {
+      if (m.sender_id === userId && !m.seen_at) m.seen_at = now;
+    });
+  } catch (err) {
+    console.error("mark seen", err);
+  }
+
   renderChatMessages(userId);
 }
 
@@ -2377,9 +2533,14 @@ function renderChatMessages(userId) {
       } else {
         body = escapeHTML(m.content || "");
       }
+      const seenHtml =
+        mine && m.seen_at
+          ? `<span class="seen-label">Seen</span>`
+          : "";
       return `<div class="chat-bubble ${mine ? "mine" : "theirs"}">
         ${body}
         <time>${formatPostTime(m.created_at)}</time>
+        ${seenHtml}
       </div>`;
     })
     .join("");
