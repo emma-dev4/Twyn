@@ -65,8 +65,8 @@
 </head>
 <body>
 
-  <!-- AUTH -->
-  <section class="auth-screen" id="authScreen">
+  <!-- AUTH (hidden until no session) -->
+  <section class="auth-screen hidden" id="authScreen">
     <div class="auth-card">
       <div class="auth-brand">
         <div class="auth-brand-mark">T</div>
@@ -122,7 +122,7 @@
 
     <main class="main-content">
 
-      <!-- HOME (feed + comments open inside posts via JS) -->
+      <!-- HOME -->
       <section class="page active" id="homePage">
         <div class="home-header">
           <div>
@@ -184,7 +184,7 @@
         </div>
       </section>
 
-      <!-- INBOX: NOTIFICATIONS + MESSAGES -->
+      <!-- INBOX -->
       <section class="page" id="inboxPage">
         <div class="page-heading" id="inboxHeading">
           <div>
@@ -198,12 +198,10 @@
           <button class="inbox-tab" data-inbox="messages" type="button">Messages</button>
         </div>
 
-        <!-- NOTIFICATIONS / ACTIVITY -->
         <div class="inbox-panel" id="activityPanel">
           <div class="inbox-list" id="activityList"></div>
         </div>
 
-        <!-- TEXT / MESSAGES -->
         <div class="inbox-panel hidden" id="messagesPanel">
           <div class="messages-layout" id="messagesLayout">
             <div class="conversations-list" id="conversationsList"></div>
