@@ -1,6 +1,6 @@
 /* =========================================================
    TWYN — COMPLETE SCRIPT.JS
-   V19 — Live chat order + Web Push subscriptions
+   V20 — Push connected (like/comment/follow/message/save)
    ========================================================= */
 
 let authMode = "signup";
@@ -182,6 +182,40 @@ async function disablePushNotifications() {
   state.settings.notifPush = false;
   saveSettingsToStorage();
 }
+
+async function sendPushToUser(userId, title, body, url = "./") {
+  if (!userId || !currentUser) return;
+  if (String(userId) === String(currentUser.id)) return;
+  try {
+    const { data: sessionData } = await supabaseClient.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) return;
+
+    const fnUrl = "https://zzcyrznqxunmgivpqryi.supabase.co/functions/v1/send-push";
+    const anonKey =
+      supabaseClient.supabaseKey ||
+      (typeof SUPABASE_ANON_KEY !== "undefined" ? SUPABASE_ANON_KEY : null) ||
+      token;
+
+    await fetch(fnUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        apikey: anonKey
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        title: title || "Twyn",
+        body: body || "You have a new notification",
+        url: url || "./"
+      })
+    });
+  } catch (err) {
+    console.error("sendPushToUser", err);
+  }
+}
+
 
 /* ========== SKELETON HELPERS ========== */
 function createSkeletonPost() {
@@ -592,6 +626,11 @@ async function openUserProfile(userId) {
           await supabaseClient.from("follows").insert({ follower_id: currentUser.id, following_id: userId });
           isFollowing = true;
           if (person) person.following = true;
+          sendPushToUser(
+            userId,
+            "Twyn",
+            `${state.profile.name || "Someone"} started following you`
+          );
         }
         followBtn.textContent = isFollowing ? "Following" : "Follow";
         followBtn.classList.toggle("following", isFollowing);
@@ -1063,6 +1102,13 @@ async function handlePostClick(event) {
           await supabaseClient.from("likes").insert({ user_id: currentUser.id, post_id: post.id });
           post.liked = true;
           post.likes++;
+          if (post.userId && String(post.userId) !== String(currentUser.id)) {
+            sendPushToUser(
+              post.userId,
+              "Twyn",
+              `${state.profile.name || "Someone"} liked your post`
+            );
+          }
         }
         renderFeed();
         renderProfile();
@@ -1118,6 +1164,13 @@ async function handlePostClick(event) {
           await supabaseClient.from("saved_posts").insert({ user_id: currentUser.id, post_id: post.id });
           post.saved = true;
           post.saves++;
+          if (post.userId && String(post.userId) !== String(currentUser.id)) {
+            sendPushToUser(
+              post.userId,
+              "Twyn",
+              `${state.profile.name || "Someone"} saved your post`
+            );
+          }
         }
         renderFeed();
       } catch (err) {
@@ -1207,6 +1260,13 @@ async function submitComment(post, button) {
     input.value = "";
     renderFeed();
     await loadNotifications();
+    if (post.userId && String(post.userId) !== String(currentUser.id)) {
+      sendPushToUser(
+        post.userId,
+        "Twyn",
+        `${state.profile.name || "Someone"} commented on your post`
+      );
+    }
   } catch (err) {
     alert(err.message || "Unable to comment");
   } finally {
@@ -1656,6 +1716,11 @@ function renderFriends(type = "followers") {
         } else {
           await supabaseClient.from("follows").insert({ follower_id: currentUser.id, following_id: person.id });
           person.following = true;
+          sendPushToUser(
+            person.id,
+            "Twyn",
+            `${state.profile.name || "Someone"} started following you`
+          );
         }
         e.target.textContent = person.following ? "Following" : "Follow";
         e.target.classList.toggle("following", person.following);
@@ -2345,6 +2410,13 @@ async function sendChatMessage({ mediaUrl = null, mediaType = null } = {}) {
     const idx = arr.findIndex((m) => m.id === temp.id);
     if (idx !== -1) arr[idx] = data;
     await loadConversations();
+
+    const preview = (content || "").trim() || (mediaType === "image" ? "Sent a photo" : mediaType === "audio" ? "Sent a voice note" : "Sent you a message");
+    sendPushToUser(
+      activeChatUserId,
+      "Twyn",
+      `${state.profile.name || "Someone"}: ${preview.slice(0, 80)}`
+    );
   } catch (err) {
     console.error("Message send error:", err);
     alert(err.message || "Unable to send message. Did you add media_url / media_type columns?");
