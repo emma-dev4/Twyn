@@ -103,9 +103,10 @@ function urlBase64ToUint8Array(base64String) {
   return out;
 }
 
-async function enablePushNotifications() {
+async function enablePushNotifications(options = {}) {
+  const silent = !!options.silent;
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-    alert("Push notifications are not supported on this browser/device.");
+    if (!silent) alert("Push notifications are not supported on this browser/device.");
     return false;
   }
   if (!currentUser) return false;
@@ -115,9 +116,26 @@ async function enablePushNotifications() {
   }
 
   try {
-    const permission = await Notification.requestPermission();
+    // If already denied, never prompt again — browsers block it
+    if (typeof Notification !== "undefined" && Notification.permission === "denied") {
+      if (!silent) {
+        alert(
+          "Notifications are blocked for Twyn on this device.\n\n" +
+          "iPhone: Settings → Notifications → Twyn → Allow\n" +
+          "or delete Home Screen app, clear site data, re-add, then Allow.\n\n" +
+          "Android: Chrome site settings → Notifications → Allow"
+        );
+      }
+      return false;
+    }
+
+    const permission =
+      Notification.permission === "granted"
+        ? "granted"
+        : await Notification.requestPermission();
+
     if (permission !== "granted") {
-      alert("Notification permission was denied.");
+      if (!silent) alert("Notification permission was denied.");
       return false;
     }
 
@@ -154,7 +172,9 @@ async function enablePushNotifications() {
     return true;
   } catch (err) {
     console.error("Push enable error:", err);
-    alert(err.message || "Could not enable push notifications. Did you create the push_subscriptions table?");
+    if (!silent) {
+      alert(err.message || "Could not enable push notifications. Did you create the push_subscriptions table?");
+    }
     return false;
   }
 }
@@ -380,7 +400,12 @@ if (authForm) {
       showApp();
       await loadTwynData();
       if (state.settings.notifPush) {
-        enablePushNotifications().catch(() => {});
+        if (typeof Notification !== "undefined" && Notification.permission === "denied") {
+          state.settings.notifPush = false;
+          saveSettingsToStorage();
+        } else {
+          enablePushNotifications({ silent: true }).catch(() => {});
+        }
       }
       setAuthMessage("");
     } catch (error) {
@@ -2848,7 +2873,12 @@ async function initializeAuth() {
     showApp();
     await loadTwynData();
     if (state.settings.notifPush) {
-      enablePushNotifications().catch(() => {});
+      if (typeof Notification !== "undefined" && Notification.permission === "denied") {
+        state.settings.notifPush = false;
+        saveSettingsToStorage();
+      } else {
+        enablePushNotifications({ silent: true }).catch(() => {});
+      }
     }
   } catch (err) {
     console.error(err);
