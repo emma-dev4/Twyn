@@ -1,6 +1,6 @@
 /* =========================================================
    TWYN — COMPLETE SCRIPT.JS
-   V18 — Live messages + correct order + session auth
+   V19 — Live chat order + Web Push subscriptions
    ========================================================= */
 
 let authMode = "signup";
@@ -89,6 +89,98 @@ const editPostModal = document.getElementById("editPostModal");
 /* ========== HELPERS ========== */
 function verifiedBadge(isVerified) {
   return isVerified ? `<span class="verified-badge" title="Verified"></span>` : "";
+}
+
+/* ========== WEB PUSH ========== */
+const VAPID_PUBLIC_KEY = "BLyUWkcD66kcJdVj_Mc-5ieor09wDli0cnQGPJHKvl0ocbRXyFeSfwLMUS2yRBQ19Q7gGLtJpUAuib-8JBgrhYs";
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+async function enablePushNotifications() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    alert("Push notifications are not supported on this browser/device.");
+    return false;
+  }
+  if (!currentUser) return false;
+  if (!VAPID_PUBLIC_KEY) {
+    console.warn("VAPID_PUBLIC_KEY missing");
+    return false;
+  }
+
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      alert("Notification permission was denied.");
+      return false;
+    }
+
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+
+    const json = sub.toJSON();
+    const endpoint = json.endpoint;
+    const p256dh = json.keys && json.keys.p256dh;
+    const auth = json.keys && json.keys.auth;
+    if (!endpoint || !p256dh || !auth) throw new Error("Invalid push subscription");
+
+    const { error } = await supabaseClient.from("push_subscriptions").upsert(
+      {
+        user_id: currentUser.id,
+        endpoint,
+        p256dh,
+        auth
+      },
+      { onConflict: "user_id,endpoint" }
+    );
+    if (error) throw error;
+
+    state.settings.notifPush = true;
+    saveSettingsToStorage();
+    const el = document.getElementById("settingNotifPush");
+    if (el) el.checked = true;
+    return true;
+  } catch (err) {
+    console.error("Push enable error:", err);
+    alert(err.message || "Could not enable push notifications. Did you create the push_subscriptions table?");
+    return false;
+  }
+}
+
+async function disablePushNotifications() {
+  try {
+    if ("serviceWorker" in navigator) {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        const endpoint = sub.endpoint;
+        await sub.unsubscribe();
+        if (currentUser) {
+          await supabaseClient
+            .from("push_subscriptions")
+            .delete()
+            .eq("user_id", currentUser.id)
+            .eq("endpoint", endpoint);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Push disable error:", err);
+  }
+  state.settings.notifPush = false;
+  saveSettingsToStorage();
 }
 
 /* ========== SKELETON HELPERS ========== */
@@ -253,6 +345,9 @@ if (authForm) {
       await loadCurrentProfile();
       showApp();
       await loadTwynData();
+      if (state.settings.notifPush) {
+        enablePushNotifications().catch(() => {});
+      }
       setAuthMessage("");
     } catch (error) {
       console.error("Twyn auth error:", error);
@@ -2359,10 +2454,9 @@ function saveSettingsToStorage() {
   localStorage.setItem("twyn_settings", JSON.stringify(state.settings));
 }
 
-["settingNotifPush", "settingNotifLikes", "settingNotifComments", "settingPrivate", "settingLightMode"].forEach((id) => {
+["settingNotifLikes", "settingNotifComments", "settingPrivate", "settingLightMode"].forEach((id) => {
   document.getElementById(id)?.addEventListener("change", (e) => {
     const key = {
-      settingNotifPush: "notifPush",
       settingNotifLikes: "notifLikes",
       settingNotifComments: "notifComments",
       settingPrivate: "privateAccount",
@@ -2379,6 +2473,19 @@ function saveSettingsToStorage() {
       loadNotifications();
     }
   });
+});
+
+document.getElementById("settingNotifPush")?.addEventListener("change", async (e) => {
+  if (e.target.checked) {
+    const ok = await enablePushNotifications();
+    if (!ok) {
+      e.target.checked = false;
+      state.settings.notifPush = false;
+      saveSettingsToStorage();
+    }
+  } else {
+    await disablePushNotifications();
+  }
 });
 
 document.getElementById("openSettingsBtn")?.addEventListener("click", () => {
@@ -2569,8 +2676,6 @@ async function handleRealtimeNewPost(payload) {
 function handleRealtimeMessage(payload) {
   const msg = payload.new;
   if (!msg || !currentUser) return;
-
-  // Only care about messages involving me
   if (msg.sender_id !== currentUser.id && msg.receiver_id !== currentUser.id) return;
 
   const otherUserId =
@@ -2582,7 +2687,6 @@ function handleRealtimeMessage(payload) {
     (m) => String(m.id) === String(msg.id)
   );
   if (!exists) {
-    // Drop matching optimistic temp bubble if any
     state.messages[otherUserId] = state.messages[otherUserId].filter((m) => {
       if (!String(m.id).startsWith("temp-")) return true;
       return !(
@@ -2661,10 +2765,9 @@ async function initializeAuth() {
   try {
     const user = await getTwynUser();
     if (!user) {
-      currentUser = null;
+      showAuth();
       authMode = "login";
       updateAuthMode();
-      showAuth();
       return;
     }
     currentUser = user;
@@ -2672,6 +2775,9 @@ async function initializeAuth() {
     await loadCurrentProfile();
     showApp();
     await loadTwynData();
+    if (state.settings.notifPush) {
+      enablePushNotifications().catch(() => {});
+    }
   } catch (err) {
     console.error(err);
     currentUser = null;
