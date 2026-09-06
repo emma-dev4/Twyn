@@ -1,6 +1,6 @@
 /* =========================================================
    TWYN — COMPLETE SCRIPT.JS
-   V17 — Profiles + Notifs (follow/save/message) + Comments + Chat
+   V18 — Live messages + correct order + session auth
    ========================================================= */
 
 let authMode = "signup";
@@ -2152,19 +2152,17 @@ async function openChat(userId) {
     `;
   }
 
-  if (!state.messages[userId]) {
-    try {
-      const { data } = await supabaseClient
-        .from("messages")
-        .select("*")
-        .or(
-          `and(sender_id.eq.${currentUser.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${currentUser.id})`
-        )
-        .order("created_at", { ascending: true });
-      state.messages[userId] = data || [];
-    } catch {
-      state.messages[userId] = [];
-    }
+  try {
+    const { data } = await supabaseClient
+      .from("messages")
+      .select("*")
+      .or(
+        `and(sender_id.eq.${currentUser.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${currentUser.id})`
+      )
+      .order("created_at", { ascending: true });
+    state.messages[userId] = data || [];
+  } catch {
+    if (!state.messages[userId]) state.messages[userId] = [];
   }
   renderChatMessages(userId);
 }
@@ -2172,11 +2170,17 @@ async function openChat(userId) {
 function renderChatMessages(userId) {
   const container = document.getElementById("chatMessages");
   if (!container) return;
-  const msgs = state.messages[userId] || [];
+
+  const msgs = [...(state.messages[userId] || [])].sort(
+    (a, b) => new Date(a.created_at) - new Date(b.created_at)
+  );
+  state.messages[userId] = msgs;
+
   if (!msgs.length) {
     container.innerHTML = `<div class="empty-state" style="padding:40px 10px"><span>No messages yet. Say hi!</span></div>`;
     return;
   }
+
   container.innerHTML = msgs
     .map((m) => {
       const mine = m.sender_id === currentUser.id;
@@ -2564,18 +2568,41 @@ async function handleRealtimeNewPost(payload) {
 
 function handleRealtimeMessage(payload) {
   const msg = payload.new;
-  if (!msg) return;
-  const otherUserId = msg.sender_id === currentUser?.id ? msg.receiver_id : msg.sender_id;
+  if (!msg || !currentUser) return;
+
+  // Only care about messages involving me
+  if (msg.sender_id !== currentUser.id && msg.receiver_id !== currentUser.id) return;
+
+  const otherUserId =
+    msg.sender_id === currentUser.id ? msg.receiver_id : msg.sender_id;
+
   if (!state.messages[otherUserId]) state.messages[otherUserId] = [];
-  const exists = state.messages[otherUserId].some((m) => String(m.id) === String(msg.id));
-  if (!exists) state.messages[otherUserId].push(msg);
+
+  const exists = state.messages[otherUserId].some(
+    (m) => String(m.id) === String(msg.id)
+  );
+  if (!exists) {
+    // Drop matching optimistic temp bubble if any
+    state.messages[otherUserId] = state.messages[otherUserId].filter((m) => {
+      if (!String(m.id).startsWith("temp-")) return true;
+      return !(
+        m.sender_id === msg.sender_id &&
+        m.receiver_id === msg.receiver_id &&
+        (m.content || "") === (msg.content || "")
+      );
+    });
+    state.messages[otherUserId].push(msg);
+  }
+
   if (String(activeChatUserId) === String(otherUserId)) {
     renderChatMessages(otherUserId);
   }
+
   loadConversations().then(() => {
     if (!activeChatUserId) renderConversations();
   });
-  if (msg.receiver_id === currentUser?.id) {
+
+  if (msg.receiver_id === currentUser.id) {
     loadNotifications();
   }
 }
@@ -2634,9 +2661,10 @@ async function initializeAuth() {
   try {
     const user = await getTwynUser();
     if (!user) {
-      showAuth();
+      currentUser = null;
       authMode = "login";
       updateAuthMode();
+      showAuth();
       return;
     }
     currentUser = user;
@@ -2647,6 +2675,8 @@ async function initializeAuth() {
   } catch (err) {
     console.error(err);
     currentUser = null;
+    authMode = "login";
+    updateAuthMode();
     showAuth();
   }
 }
