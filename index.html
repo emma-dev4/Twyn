@@ -65,7 +65,7 @@
 </head>
 <body>
 
-  <!-- AUTH (hidden until no session) -->
+  <!-- AUTH -->
   <section class="auth-screen hidden" id="authScreen">
     <div class="auth-card">
       <div class="auth-brand">
@@ -93,6 +93,45 @@
       <div class="auth-switch">
         <span id="authSwitchText">Already have an account?</span>
         <button id="authSwitchBtn" type="button">Log in</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ONBOARDING -->
+  <section class="onboarding-screen hidden" id="onboardingScreen">
+    <div class="onboarding-card">
+      <div class="onboarding-progress">
+        <span class="ob-dot active" data-ob-dot="0"></span>
+        <span class="ob-dot" data-ob-dot="1"></span>
+        <span class="ob-dot" data-ob-dot="2"></span>
+      </div>
+
+      <div class="ob-step active" data-ob-step="0">
+        <div class="ob-emoji">☁️</div>
+        <h2>Welcome to Twyn</h2>
+        <p>Social, reimagined. Posts, friends, and real chat — all in one place.</p>
+        <button type="button" class="ob-next" data-ob-next>Continue</button>
+      </div>
+
+      <div class="ob-step" data-ob-step="1">
+        <div class="ob-emoji">✨</div>
+        <h2>Your identity</h2>
+        <p>Pick how you show up. Early members can claim the cloud mark.</p>
+        <label class="ob-label">Display name</label>
+        <input id="obName" type="text" maxlength="40" placeholder="Your name" />
+        <label class="ob-cloud-row">
+          <input type="checkbox" id="obCloud" />
+          <span>Add ☁️ cloud mark to my name</span>
+        </label>
+        <button type="button" class="ob-next" data-ob-next>Continue</button>
+      </div>
+
+      <div class="ob-step" data-ob-step="2">
+        <div class="ob-emoji">🔔</div>
+        <h2>Stay in the loop</h2>
+        <p>Turn on notifications for likes, comments, follows, and messages.</p>
+        <button type="button" class="ob-next" id="obEnablePush">Enable notifications</button>
+        <button type="button" class="ob-skip" id="obFinish">Maybe later — enter Twyn</button>
       </div>
     </div>
   </section>
@@ -205,23 +244,6 @@
         <div class="inbox-panel hidden" id="messagesPanel">
           <div class="messages-layout" id="messagesLayout">
             <div class="conversations-list" id="conversationsList"></div>
-
-            <div class="chat-view hidden" id="chatView">
-              <div class="chat-header">
-                <button class="chat-back-btn" id="chatBackBtn" type="button">←</button>
-                <div class="chat-header-info" id="chatHeader"></div>
-              </div>
-              <div class="chat-messages" id="chatMessages"></div>
-              <div class="chat-input-row">
-                <label class="chat-media-btn" title="Photo">
-                  <input type="file" id="chatImageInput" accept="image/*" hidden />
-                  📷
-                </label>
-                <button type="button" class="chat-media-btn" id="chatVoiceBtn" title="Voice note">🎙</button>
-                <input type="text" id="chatInput" placeholder="Message..." maxlength="1000" />
-                <button type="button" id="sendMessageBtn">Send</button>
-              </div>
-            </div>
           </div>
         </div>
       </section>
@@ -240,6 +262,7 @@
           <div class="profile-info">
             <h1 id="profileName">Your Name</h1>
             <span id="profileUsername">@yourname</span>
+            <p id="profilePresence" class="profile-presence"></p>
             <p id="profileBio">Building. Creating. Sharing.</p>
           </div>
           <div class="profile-stats">
@@ -282,6 +305,7 @@
           <div class="profile-info">
             <h1 id="otherProfileName">User</h1>
             <span id="otherProfileUsername">@user</span>
+            <p id="otherProfilePresence" class="profile-presence"></p>
             <p id="otherProfileBio"></p>
           </div>
           <div class="profile-stats">
@@ -307,7 +331,6 @@
           <button class="settings-item" type="button" id="settingsEditProfile">
             <span>Edit profile</span><span>›</span>
           </button>
-
           <div class="settings-item toggle-item">
             <span>Light mode</span>
             <label class="switch">
@@ -315,7 +338,6 @@
               <span class="slider"></span>
             </label>
           </div>
-
           <div class="settings-item toggle-item">
             <span>Push notifications</span>
             <label class="switch"><input type="checkbox" id="settingNotifPush" checked /><span class="slider"></span></label>
@@ -369,6 +391,26 @@
     </nav>
   </div>
 
+  <!-- FULL-SCREEN CHAT (own layer — leaves inbox behind) -->
+  <div class="chat-space hidden" id="chatSpace">
+    <div class="chat-view" id="chatView">
+      <div class="chat-header">
+        <button class="chat-back-btn" id="chatBackBtn" type="button">←</button>
+        <div class="chat-header-info" id="chatHeader"></div>
+      </div>
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-input-row">
+        <label class="chat-media-btn" title="Photo">
+          <input type="file" id="chatImageInput" accept="image/*" hidden />
+          📷
+        </label>
+        <button type="button" class="chat-media-btn" id="chatVoiceBtn" title="Voice note">🎙</button>
+        <input type="text" id="chatInput" placeholder="Message..." maxlength="1000" />
+        <button type="button" id="sendMessageBtn">Send</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ANALYSIS MODAL -->
   <div class="modal hidden" id="analysisModal">
     <div class="modal-backdrop"></div>
@@ -391,7 +433,7 @@
     </div>
   </div>
 
-  <!-- EDIT PROFILE MODAL -->
+  <!-- EDIT PROFILE -->
   <div class="modal hidden" id="profileModal">
     <div class="modal-backdrop"></div>
     <div class="edit-modal">
@@ -399,7 +441,6 @@
         <div><h2>Edit profile</h2><span>Customize your profile</span></div>
         <button class="close-modal" id="closeProfile" type="button">×</button>
       </div>
-
       <div class="cover-edit-section">
         <div class="cover-edit-preview" id="editCoverPreview"></div>
         <label class="avatar-upload-btn">
@@ -407,7 +448,6 @@
           <input type="file" id="coverInput" accept="image/*" hidden />
         </label>
       </div>
-
       <div class="avatar-edit-section">
         <div class="avatar profile-avatar-edit" id="editAvatarPreview">Y</div>
         <label class="avatar-upload-btn">
@@ -415,15 +455,18 @@
           <input type="file" id="avatarInput" accept="image/*" hidden />
         </label>
       </div>
-
       <label>Display name<input id="editName" value="Your Name" /></label>
+      <label class="ob-cloud-row" style="margin-bottom:12px">
+        <input type="checkbox" id="editCloud" />
+        <span>Show ☁️ cloud mark on my name</span>
+      </label>
       <label>Username<input id="editUsername" value="yourname" /></label>
       <label>Bio<textarea id="editBio">Building. Creating. Sharing.</textarea></label>
       <button class="save-profile-btn" id="saveProfile" type="button">Save changes</button>
     </div>
   </div>
 
-  <!-- IMAGE LIGHTBOX -->
+  <!-- LIGHTBOX -->
   <div class="modal hidden" id="imageLightbox">
     <div class="modal-backdrop" id="lightboxBackdrop"></div>
     <div class="lightbox-content">
@@ -432,7 +475,7 @@
     </div>
   </div>
 
-  <!-- POST OPTIONS MENU -->
+  <!-- POST OPTIONS -->
   <div class="modal hidden" id="postOptionsModal">
     <div class="modal-backdrop" id="postOptionsBackdrop"></div>
     <div class="post-options-sheet">
@@ -446,7 +489,7 @@
     </div>
   </div>
 
-  <!-- EDIT POST MODAL -->
+  <!-- EDIT POST -->
   <div class="modal hidden" id="editPostModal">
     <div class="modal-backdrop" id="editPostBackdrop"></div>
     <div class="edit-modal">
@@ -470,7 +513,6 @@
   <script src="supabase.js"></script>
   <script src="script.js"></script>
 
-  <!-- PWA service worker -->
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () {
