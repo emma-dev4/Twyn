@@ -365,7 +365,7 @@ body.light-mode .post-action.saved { color: #16a34a; }
   display: flex; flex-direction: column; gap: 12px;
 }
 .replies.collapsed { display: none; }
-.replies-toggle { margin-top: 8px; font-weight: 600; color: var(--accent-2); }
+.replies-toggle { margin-top: 8px; padding: 6px 0; font-weight: 600; color: var(--accent-2); min-height: 32px; }
 
 /* FRIENDS */
 .friend-tabs, .inbox-tabs {
