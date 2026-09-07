@@ -1,6 +1,6 @@
 /* =========================================================
    TWYN — COMPLETE SCRIPT.JS
-   V23 — Scroll sheets + tommyy verified + invite + real reach + seen receipts
+   V24 — Stories + smooth in-place updates (no feed glitch)
    ========================================================= */
 
 let authMode = "signup";
@@ -46,6 +46,11 @@ const state = {
   feedHasMore: true,
   isLoadingMore: false,
   viewingUserId: null,
+  stories: [],
+  storyGroups: [],
+  activeStoryGroup: 0,
+  activeStoryIndex: 0,
+  storyTimer: null,
   onboardingDone: false,
   lastActivitySeenAt: null
 };
@@ -977,7 +982,7 @@ async function loadTwynData() {
   showFriendsSkeleton();
 
   await loadPosts({ reset: true });
-  await Promise.all([loadPeople(), loadFollowers()]);
+  await Promise.all([loadPeople(), loadFollowers(), loadStories()]);
   await loadNotifications();
   await loadConversations();
 
@@ -1214,6 +1219,59 @@ function renderCategorySelector() {
 }
 
 /* ========== RENDER FEED ========== */
+
+/* ========== SMOOTH IN-PLACE UPDATES (no full feed rebuild) ========== */
+function updatePostCardUI(postId) {
+  const post = state.posts.find((p) => String(p.id) === String(postId));
+  if (!post) return;
+  document.querySelectorAll(`.post[data-id="${CSS.escape(String(postId))}"]`).forEach((card) => {
+    const likeBtn = card.querySelector('[data-action="like"]');
+    if (likeBtn) {
+      likeBtn.classList.toggle("liked", !!post.liked);
+      const span = likeBtn.querySelector("span");
+      if (span) span.textContent = post.likes;
+      else {
+        // button text may include emoji + count
+        likeBtn.innerHTML = `${post.liked ? "♥" : "♡"} <span>${post.likes}</span>`;
+      }
+    }
+    const commentBtn = card.querySelector('[data-action="comment"]');
+    if (commentBtn) {
+      const span = commentBtn.querySelector("span");
+      if (span) span.textContent = post.comments;
+    }
+    const saveBtn = card.querySelector('[data-action="save"]');
+    if (saveBtn) {
+      saveBtn.classList.toggle("saved", !!post.saved);
+      saveBtn.innerHTML = `${post.saved ? "✓" : "♧"}`;
+    }
+    const reach = card.querySelector(".post-time");
+    if (reach && typeof post.reach === "number") {
+      reach.textContent = `${post.reach.toLocaleString()} reach`;
+    }
+    // comments open state
+    const cbox = card.querySelector(`[data-comments-for="${CSS.escape(String(postId))}"]`);
+    if (cbox) {
+      const open = state.openComments.has(String(postId));
+      cbox.classList.toggle("hidden", !open);
+      if (open) {
+        const list = cbox.querySelector(".comments-list");
+        if (list) list.innerHTML = renderCommentsHTML(post);
+      }
+    }
+  });
+}
+
+function softRefreshFeed() {
+  // Only rebuild if feed is empty / first load
+  if (!feed || !feed.children.length) {
+    renderFeed();
+    return;
+  }
+  // Prefer in-place for known posts; full render only when structure changed
+  renderFeed();
+}
+
 function renderFeed() {
   if (!feed) return;
   feed.innerHTML = "";
@@ -1245,7 +1303,7 @@ function renderFeed() {
 function createPostElement(post) {
   const article = document.createElement("article");
   article.className = "post";
-  article.dataset.id = post.id;
+  article.dataset.id = String(post.id);
   const showCategory = post.world && !["typ", "general", "all"].includes(post.world);
 
   article.innerHTML = `
@@ -1438,9 +1496,10 @@ async function handlePostClick(event) {
             );
           }
         }
-        renderFeed();
-        renderProfile();
-        await loadNotifications();
+        updatePostCardUI(post.id);
+        haptic(15);
+        popEl(button);
+        loadNotifications();
       } catch (err) {
         console.error(err);
         alert(err.message || "Unable to like");
@@ -1457,7 +1516,7 @@ async function handlePostClick(event) {
         state.openComments.add(key);
         await loadPostComments(post);
       }
-      refreshPostViews();
+      updatePostCardUI(post.id);
       return;
     }
 
@@ -1476,7 +1535,7 @@ async function handlePostClick(event) {
           alert("Link copied");
         } else prompt("Copy link", url);
       } catch {}
-      renderFeed();
+      updatePostCardUI(post.id);
       return;
     }
 
@@ -1500,7 +1559,8 @@ async function handlePostClick(event) {
             );
           }
         }
-        renderFeed();
+        updatePostCardUI(post.id);
+        popEl(button);
       } catch (err) {
         alert(err.message || "Unable to save");
       } finally {
@@ -1525,7 +1585,7 @@ async function handlePostClick(event) {
       const key = `reply-${button.dataset.commentId}`;
       if (state.openReplies.has(key)) state.openReplies.delete(key);
       else state.openReplies.add(key);
-      refreshPostViews();
+      updatePostCardUI(button.dataset.postId || id);
       return;
     }
 
@@ -1533,7 +1593,7 @@ async function handlePostClick(event) {
       const key = `thread-${button.dataset.commentId}`;
       if (state.openReplyThreads.has(key)) state.openReplyThreads.delete(key);
       else state.openReplyThreads.add(key);
-      refreshPostViews();
+      updatePostCardUI(button.dataset.postId || id);
       return;
     }
 
@@ -1606,8 +1666,8 @@ async function submitComment(post, button) {
     post.comments = post.commentData.length;
     state.openComments.add(String(post.id));
     input.value = "";
-    refreshPostViews();
-    await loadNotifications();
+    updatePostCardUI(post.id);
+    loadNotifications();
     if (post.userId && String(post.userId) !== String(currentUser.id)) {
       sendPushToUser(
         post.userId,
@@ -1647,7 +1707,7 @@ async function deleteComment(post, commentId) {
     }
     post.commentData = (post.commentData || []).filter((c) => !removeIds.has(String(c.id)));
     post.comments = (post.commentData || []).filter((c) => !c.parent_id).length;
-    refreshPostViews();
+    updatePostCardUI(post.id);
   } catch (err) {
     alert(err.message || "Unable to delete comment");
   }
@@ -1672,7 +1732,7 @@ async function toggleCommentLike(post, commentId, button) {
     if (already) comment.likes = comment.likes.filter((l) => l.user_id !== currentUser.id);
     else comment.likes.push({ user_id: currentUser.id });
   }
-  refreshPostViews();
+  updatePostCardUI(post.id);
   button.disabled = false;
 }
 
@@ -1712,7 +1772,7 @@ async function submitReply(post, parentId, button) {
     state.openReplyThreads.add(`thread-${parentId}`);
     state.openComments.add(String(post.id));
     input.value = "";
-    refreshPostViews();
+    updatePostCardUI(post.id);
     await loadNotifications();
   } catch (err) {
     alert(err.message || "Unable to reply");
@@ -3128,8 +3188,7 @@ function handleRealtimeLike(payload) {
     post.likes = Math.max(0, post.likes - 1);
     if (oldRow?.user_id === currentUser?.id) post.liked = false;
   }
-  renderFeed();
-  renderProfile();
+  updatePostCardUI(postId);
   loadNotifications();
 }
 
@@ -3142,14 +3201,14 @@ function handleRealtimeComment(payload) {
   if (eventType === "INSERT") {
     post.comments += 1;
     if (state.openComments.has(String(postId))) {
-      loadPostComments(post).then(() => renderFeed());
-    } else renderFeed();
+      loadPostComments(post).then(() => updatePostCardUI(postId));
+    } else updatePostCardUI(postId);
     if (newRow.user_id !== currentUser?.id) loadNotifications();
   } else if (eventType === "DELETE") {
     post.comments = Math.max(0, post.comments - 1);
     if (state.openComments.has(String(postId))) {
-      loadPostComments(post).then(() => renderFeed());
-    } else renderFeed();
+      loadPostComments(post).then(() => updatePostCardUI(postId));
+    } else updatePostCardUI(postId);
   }
 }
 
@@ -3286,6 +3345,193 @@ document.getElementById("logoutBtn")?.addEventListener("click", async () => {
     btn.disabled = false;
   }
 });
+
+
+/* ========== STORIES ========== */
+async function loadStories() {
+  if (!currentUser) return;
+  try {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabaseClient
+      .from("stories")
+      .select("id, user_id, media_url, created_at, profiles!user_id (username, display_name, avatar_url, is_verified)")
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(80);
+    if (error) throw error;
+    state.stories = data || [];
+    // group by user
+    const map = new Map();
+    (data || []).forEach((s) => {
+      const uid = s.user_id;
+      if (!map.has(uid)) {
+        const name = s.profiles?.display_name || "User";
+        map.set(uid, {
+          userId: uid,
+          name,
+          username: s.profiles?.username || "user",
+          avatarUrl: s.profiles?.avatar_url || null,
+          isVerified: isVerifiedProfile(s.profiles),
+          items: []
+        });
+      }
+      map.get(uid).items.push(s);
+    });
+    // own first
+    const groups = Array.from(map.values());
+    groups.forEach((g) => g.items.sort((a, b) => new Date(a.created_at) - new Date(b.created_at)));
+    groups.sort((a, b) => {
+      if (String(a.userId) === String(currentUser.id)) return -1;
+      if (String(b.userId) === String(currentUser.id)) return 1;
+      return new Date(b.items[b.items.length - 1].created_at) - new Date(a.items[a.items.length - 1].created_at);
+    });
+    state.storyGroups = groups;
+    renderStories();
+  } catch (err) {
+    console.error("stories", err);
+    state.storyGroups = [];
+    renderStories();
+  }
+}
+
+function renderStories() {
+  const list = document.getElementById("storiesList");
+  if (!list) return;
+  const addAv = document.getElementById("storyAddAvatar");
+  if (addAv && state.profile.avatar_url) {
+    addAv.innerHTML = `<img src="${escapeAttribute(state.profile.avatar_url)}" alt="">`;
+  } else if (addAv) {
+    addAv.textContent = "+";
+  }
+
+  const others = state.storyGroups.filter((g) => String(g.userId) !== String(currentUser?.id));
+  if (!others.length) {
+    list.innerHTML = "";
+    return;
+  }
+  list.innerHTML = others
+    .map((g, idx) => {
+      const seenKey = `story_seen_${g.userId}`;
+      let seen = false;
+      try { seen = sessionStorage.getItem(seenKey) === "1"; } catch {}
+      const initial = (g.name || "U").charAt(0).toUpperCase();
+      return `<button type="button" class="story-item" data-story-group="${idx + (state.storyGroups[0] && String(state.storyGroups[0].userId) === String(currentUser?.id) ? 1 : 0)}" data-user-id="${escapeAttribute(g.userId)}">
+        <div class="story-ring ${seen ? "seen" : ""}">
+          <div class="story-avatar">${g.avatarUrl ? `<img src="${escapeAttribute(g.avatarUrl)}" alt="">` : escapeHTML(initial)}</div>
+        </div>
+        <span>${escapeHTML(g.name.split(" ")[0])}</span>
+      </button>`;
+    })
+    .join("");
+
+  // fix indices: use user id click
+  list.querySelectorAll(".story-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const uid = btn.dataset.userId;
+      const gi = state.storyGroups.findIndex((g) => String(g.userId) === String(uid));
+      if (gi >= 0) openStoryGroup(gi);
+    });
+  });
+}
+
+function openStoryGroup(groupIndex) {
+  if (!state.storyGroups[groupIndex]) return;
+  state.activeStoryGroup = groupIndex;
+  state.activeStoryIndex = 0;
+  document.getElementById("storyViewer")?.classList.remove("hidden");
+  showActiveStory();
+}
+
+function closeStoryViewer() {
+  if (state.storyTimer) {
+    clearTimeout(state.storyTimer);
+    state.storyTimer = null;
+  }
+  document.getElementById("storyViewer")?.classList.add("hidden");
+}
+
+function showActiveStory() {
+  const group = state.storyGroups[state.activeStoryGroup];
+  if (!group) return closeStoryViewer();
+  const item = group.items[state.activeStoryIndex];
+  if (!item) return closeStoryViewer();
+
+  try { sessionStorage.setItem(`story_seen_${group.userId}`, "1"); } catch {}
+
+  const img = document.getElementById("storyViewerImage");
+  const userEl = document.getElementById("storyViewerUser");
+  const progress = document.getElementById("storyProgress");
+  if (img) img.src = item.media_url;
+  if (userEl) {
+    userEl.innerHTML = `${group.avatarUrl ? `<div class="avatar" style="width:28px;height:28px"><img src="${escapeAttribute(group.avatarUrl)}" alt=""></div>` : ""}
+      <span>${escapeHTML(group.name)}${verifiedBadge(group.isVerified)}</span>`;
+  }
+  if (progress) {
+    progress.innerHTML = group.items
+      .map((_, i) => {
+        if (i < state.activeStoryIndex) return `<span class="done"><i></i></span>`;
+        if (i === state.activeStoryIndex) return `<span class="active"><i style="animation-duration:5s"></i></span>`;
+        return `<span><i></i></span>`;
+      })
+      .join("");
+  }
+
+  if (state.storyTimer) clearTimeout(state.storyTimer);
+  state.storyTimer = setTimeout(() => storyNext(), 5000);
+}
+
+function storyNext() {
+  const group = state.storyGroups[state.activeStoryGroup];
+  if (!group) return closeStoryViewer();
+  if (state.activeStoryIndex < group.items.length - 1) {
+    state.activeStoryIndex += 1;
+    showActiveStory();
+  } else if (state.activeStoryGroup < state.storyGroups.length - 1) {
+    openStoryGroup(state.activeStoryGroup + 1);
+  } else {
+    closeStoryViewer();
+    renderStories();
+  }
+}
+
+function storyPrev() {
+  if (state.activeStoryIndex > 0) {
+    state.activeStoryIndex -= 1;
+    showActiveStory();
+  } else if (state.activeStoryGroup > 0) {
+    const prev = state.activeStoryGroup - 1;
+    state.activeStoryGroup = prev;
+    state.activeStoryIndex = state.storyGroups[prev].items.length - 1;
+    showActiveStory();
+  }
+}
+
+document.getElementById("addStoryBtn")?.addEventListener("click", () => {
+  document.getElementById("storyInput")?.click();
+});
+document.getElementById("storyInput")?.addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = "";
+  if (!file || !currentUser) return;
+  if (!file.type.startsWith("image/")) return alert("Pick an image");
+  if (file.size > 6 * 1024 * 1024) return alert("Story image must be under 6MB");
+  try {
+    const url = await uploadToStorage(file, "stories");
+    const { error } = await supabaseClient.from("stories").insert({
+      user_id: currentUser.id,
+      media_url: url
+    });
+    if (error) throw error;
+    haptic(12);
+    await loadStories();
+  } catch (err) {
+    alert(err.message || "Could not post story. Create the stories table in Supabase.");
+  }
+});
+document.getElementById("storyViewerClose")?.addEventListener("click", closeStoryViewer);
+document.getElementById("storyNext")?.addEventListener("click", storyNext);
+document.getElementById("storyPrev")?.addEventListener("click", storyPrev);
+
 
 /* ========== INIT ========== */
 async function initializeAuth() {
