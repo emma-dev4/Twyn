@@ -1,6 +1,6 @@
 /* =========================================================
    TWYN — COMPLETE SCRIPT.JS
-   V21 — Unread + seen + collapsible replies + delete comments + other-profile comments
+   V22 — Onboarding + cloud name + presence + haptics + full chat space
    ========================================================= */
 
 let authMode = "signup";
@@ -45,7 +45,10 @@ const state = {
   feedPage: 0,
   feedHasMore: true,
   isLoadingMore: false,
-  viewingUserId: null
+  viewingUserId: null,
+  onboardingDone: false,
+  hasCloudMark: false,
+  lastActivitySeenAt: null
 };
 
 const TWYN_CATEGORIES = [
@@ -91,6 +94,142 @@ const editPostModal = document.getElementById("editPostModal");
 function verifiedBadge(isVerified) {
   return isVerified ? `<span class="verified-badge" title="Verified"></span>` : "";
 }
+
+function haptic(ms = 12) {
+  try {
+    if (navigator.vibrate) navigator.vibrate(ms);
+  } catch {}
+}
+
+function popEl(el) {
+  if (!el) return;
+  el.classList.remove("pop");
+  void el.offsetWidth;
+  el.classList.add("pop");
+  setTimeout(() => el.classList.remove("pop"), 400);
+}
+
+function withCloudName(name, hasCloud) {
+  const base = String(name || "Twyn User").replace(/\s*☁️\s*/g, " ").trim();
+  return hasCloud ? `${base} ☁️` : base;
+}
+
+function detectCloudMark(name) {
+  return /☁️/.test(String(name || ""));
+}
+
+function formatPresence(lastSeenAt) {
+  if (!lastSeenAt) return { text: "Offline", online: false };
+  const t = new Date(lastSeenAt).getTime();
+  if (Number.isNaN(t)) return { text: "Offline", online: false };
+  const diff = Date.now() - t;
+  if (diff < 2 * 60 * 1000) return { text: "Online", online: true };
+  if (diff < 60 * 60 * 1000) {
+    const m = Math.max(1, Math.floor(diff / 60000));
+    return { text: `Active ${m}m ago`, online: false };
+  }
+  if (diff < 24 * 60 * 60 * 1000) {
+    const h = Math.floor(diff / 3600000);
+    return { text: `Active ${h}h ago`, online: false };
+  }
+  return { text: `Active ${formatPostTime(lastSeenAt)}`, online: false };
+}
+
+async function bumpLastSeen() {
+  if (!currentUser) return;
+  try {
+    await supabaseClient
+      .from("profiles")
+      .update({ last_seen_at: new Date().toISOString() })
+      .eq("id", currentUser.id);
+  } catch {}
+}
+
+function startPresenceHeartbeat() {
+  bumpLastSeen();
+  if (state.presenceTimer) clearInterval(state.presenceTimer);
+  state.presenceTimer = setInterval(bumpLastSeen, 45000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") bumpLastSeen();
+  });
+}
+
+/* ========== ONBOARDING ========== */
+function hasFinishedOnboarding() {
+  try {
+    return localStorage.getItem("twyn_onboarding_done") === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setOnboardingDone() {
+  state.onboardingDone = true;
+  try {
+    localStorage.setItem("twyn_onboarding_done", "1");
+  } catch {}
+}
+
+function showOnboarding() {
+  const el = document.getElementById("onboardingScreen");
+  if (el) el.classList.remove("hidden");
+  const nameInput = document.getElementById("obName");
+  if (nameInput) nameInput.value = (state.profile.name || "").replace(/\s*☁️\s*/g, " ").trim();
+  const cloud = document.getElementById("obCloud");
+  if (cloud) cloud.checked = state.hasCloudMark || detectCloudMark(state.profile.name);
+  goOnboardingStep(0);
+}
+
+function hideOnboarding() {
+  document.getElementById("onboardingScreen")?.classList.add("hidden");
+}
+
+function goOnboardingStep(step) {
+  document.querySelectorAll(".ob-step").forEach((s) => {
+    s.classList.toggle("active", Number(s.dataset.obStep) === step);
+  });
+  document.querySelectorAll(".ob-dot").forEach((d) => {
+    d.classList.toggle("active", Number(d.dataset.obDot) === step);
+  });
+}
+
+let onboardingStep = 0;
+
+document.querySelectorAll("[data-ob-next]").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    if (onboardingStep === 1) {
+      const raw = document.getElementById("obName")?.value.trim() || state.profile.name || "Twyn User";
+      const wantCloud = !!document.getElementById("obCloud")?.checked;
+      const displayName = withCloudName(raw, wantCloud);
+      state.hasCloudMark = wantCloud;
+      try {
+        if (currentUser) {
+          await supabaseClient
+            .from("profiles")
+            .update({ display_name: displayName })
+            .eq("id", currentUser.id);
+          await loadCurrentProfile();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    onboardingStep = Math.min(2, onboardingStep + 1);
+    goOnboardingStep(onboardingStep);
+  });
+});
+
+document.getElementById("obEnablePush")?.addEventListener("click", async () => {
+  await enablePushNotifications({ silent: false });
+  setOnboardingDone();
+  hideOnboarding();
+});
+
+document.getElementById("obFinish")?.addEventListener("click", () => {
+  setOnboardingDone();
+  hideOnboarding();
+});
+
 
 /* ========== WEB PUSH ========== */
 const VAPID_PUBLIC_KEY = "BLyUWkcD66kcJdVj_Mc-5ieor09wDli0cnQGPJHKvl0ocbRXyFeSfwLMUS2yRBQ19Q7gGLtJpUAuib-8JBgrhYs";
@@ -386,6 +525,8 @@ if (authForm) {
         await loadCurrentProfile();
         showApp();
         await loadTwynData();
+        startPresenceHeartbeat();
+        if (!hasFinishedOnboarding()) showOnboarding();
         setAuthMessage("");
         return;
       }
@@ -400,6 +541,8 @@ if (authForm) {
       await loadCurrentProfile();
       showApp();
       await loadTwynData();
+      startPresenceHeartbeat();
+      if (!hasFinishedOnboarding()) showOnboarding();
       if (state.settings.notifPush) {
         if (typeof Notification !== "undefined" && Notification.permission === "denied") {
           state.settings.notifPush = false;
@@ -489,13 +632,16 @@ async function loadCurrentProfile() {
 }
 
 function setProfileState(data) {
+  const displayName = data.display_name || "Twyn User";
+  state.hasCloudMark = detectCloudMark(displayName);
   state.profile = {
-    name: data.display_name || "Twyn User",
+    name: displayName,
     username: data.username || "twynuser",
     bio: data.bio || "",
     avatar_url: data.avatar_url || null,
     cover_url: data.cover_url || null,
-    is_verified: !!data.is_verified
+    is_verified: !!data.is_verified,
+    last_seen_at: data.last_seen_at || null
   };
   updateProfileUI();
 }
@@ -557,9 +703,18 @@ function updateProfileUI() {
   const editName = document.getElementById("editName");
   const editUsername = document.getElementById("editUsername");
   const editBio = document.getElementById("editBio");
-  if (editName) editName.value = name;
+  if (editName) editName.value = String(name).replace(/\s*☁️\s*/g, " ").trim();
   if (editUsername) editUsername.value = username;
   if (editBio) editBio.value = bio;
+  const editCloud = document.getElementById("editCloud");
+  if (editCloud) editCloud.checked = state.hasCloudMark || detectCloudMark(name);
+
+  const presenceEl = document.getElementById("profilePresence");
+  if (presenceEl) {
+    const p = formatPresence(new Date().toISOString());
+    presenceEl.textContent = "Online";
+    presenceEl.classList.add("is-online");
+  }
 }
 
 
@@ -590,7 +745,7 @@ async function openUserProfile(userId) {
 
   const { data: profile, error } = await supabaseClient
     .from("profiles")
-    .select("id, username, display_name, bio, avatar_url, cover_url, is_verified")
+    .select("id, username, display_name, bio, avatar_url, cover_url, is_verified, last_seen_at")
     .eq("id", userId)
     .maybeSingle();
 
@@ -607,6 +762,15 @@ async function openUserProfile(userId) {
   if (nameEl) nameEl.innerHTML = `${escapeHTML(name)}${verifiedBadge(!!profile.is_verified)}`;
   if (userEl) userEl.textContent = `@${username}`;
   if (bioEl) bioEl.textContent = profile.bio || "";
+
+  const presenceEl = document.getElementById("otherProfilePresence");
+  if (presenceEl) {
+    const p = formatPresence(profile.last_seen_at);
+    presenceEl.innerHTML = p.online
+      ? `<span class="presence-dot"></span> Online`
+      : escapeHTML(p.text);
+    presenceEl.classList.toggle("is-online", p.online);
+  }
 
   if (avatarEl) {
     if (profile.avatar_url) {
@@ -652,6 +816,8 @@ async function openUserProfile(userId) {
           await supabaseClient.from("follows").insert({ follower_id: currentUser.id, following_id: userId });
           isFollowing = true;
           if (person) person.following = true;
+          haptic(18);
+          popEl(followBtn);
           sendPushToUser(
             userId,
             "Twyn",
@@ -1180,6 +1346,8 @@ async function handlePostClick(event) {
           await supabaseClient.from("likes").insert({ user_id: currentUser.id, post_id: post.id });
           post.liked = true;
           post.likes++;
+          haptic(15);
+          popEl(button);
           if (post.userId && String(post.userId) !== String(currentUser.id)) {
             sendPushToUser(
               post.userId,
@@ -1845,6 +2013,8 @@ function renderFriends(type = "followers") {
         } else {
           await supabaseClient.from("follows").insert({ follower_id: currentUser.id, following_id: person.id });
           person.following = true;
+          haptic(18);
+          popEl(e.target);
           sendPushToUser(
             person.id,
             "Twyn",
@@ -1946,7 +2116,10 @@ if (coverInput) {
 
 document.getElementById("saveProfile")?.addEventListener("click", async () => {
   if (!currentUser) return;
-  const newName = document.getElementById("editName")?.value.trim() || "";
+  let newName = document.getElementById("editName")?.value.trim() || "";
+  const wantCloud = !!document.getElementById("editCloud")?.checked;
+  newName = withCloudName(newName, wantCloud);
+  state.hasCloudMark = wantCloud;
   const newUsername = (document.getElementById("editUsername")?.value.trim().toLowerCase().replace(/[^a-z0-9_]/g, "") || "").slice(0, 20);
   const newBio = document.getElementById("editBio")?.value.trim() || "";
   if (!newName || !newUsername) return alert("Name and username are required.");
@@ -2416,9 +2589,7 @@ function renderConversations() {
 
 function openChatUI() {
   document.body.classList.add("chat-open");
-  document.getElementById("inboxHeading")?.classList.add("hidden");
-  document.getElementById("inboxTabs")?.classList.add("hidden");
-  document.getElementById("conversationsList")?.classList.add("hidden");
+  document.getElementById("chatSpace")?.classList.remove("hidden");
   document.getElementById("chatView")?.classList.remove("hidden");
 }
 
@@ -2426,9 +2597,7 @@ function closeChatUI() {
   activeChatUserId = null;
   stopRecording(true);
   document.body.classList.remove("chat-open");
-  document.getElementById("inboxHeading")?.classList.remove("hidden");
-  document.getElementById("inboxTabs")?.classList.remove("hidden");
-  document.getElementById("conversationsList")?.classList.remove("hidden");
+  document.getElementById("chatSpace")?.classList.add("hidden");
   document.getElementById("chatView")?.classList.add("hidden");
 }
 
@@ -2461,17 +2630,36 @@ async function openChat(userId) {
 
   openChatUI();
 
+  // refresh last_seen for this user
+  let lastSeen = person.lastSeenAt || null;
+  try {
+    const { data: p2 } = await supabaseClient
+      .from("profiles")
+      .select("last_seen_at, display_name, is_verified, avatar_url, username")
+      .eq("id", userId)
+      .maybeSingle();
+    if (p2) {
+      lastSeen = p2.last_seen_at || null;
+      person.lastSeenAt = lastSeen;
+      if (p2.display_name) person.name = p2.display_name;
+      person.isVerified = !!p2.is_verified;
+      person.avatarUrl = p2.avatar_url || person.avatarUrl;
+      person.username = p2.username || person.username;
+    }
+  } catch {}
+
+  const presence = formatPresence(lastSeen);
   const header = document.getElementById("chatHeader");
   if (header) {
     header.innerHTML = `
-      <div class="avatar" style="width:34px;height:34px;font-size:13px">
+      <div class="avatar ${presence.online ? "online" : ""}" style="width:34px;height:34px;font-size:13px">
         ${person.avatarUrl
           ? `<img src="${escapeAttribute(person.avatarUrl)}" alt="">`
           : escapeHTML(person.avatar)}
       </div>
-      <div>
-        <div style="display:inline-flex;align-items:center;gap:4px">${escapeHTML(person.name)}${verifiedBadge(person.isVerified)}</div>
-        <div style="font-size:12px;color:var(--muted);font-weight:400">@${escapeHTML(person.username)}</div>
+      <div class="chat-header-meta">
+        <strong>${escapeHTML(person.name)}${verifiedBadge(person.isVerified)}</strong>
+        <span class="${presence.online ? "is-online" : ""}">${escapeHTML(presence.text)}</span>
       </div>
     `;
   }
@@ -2576,6 +2764,8 @@ async function sendChatMessage({ mediaUrl = null, mediaType = null } = {}) {
   if (!state.messages[activeChatUserId]) state.messages[activeChatUserId] = [];
   state.messages[activeChatUserId].push(temp);
   if (input) input.value = "";
+  haptic(12);
+  popEl(document.getElementById("sendMessageBtn"));
   renderChatMessages(activeChatUserId);
 
   try {
@@ -3033,6 +3223,10 @@ async function initializeAuth() {
     await loadCurrentProfile();
     showApp();
     await loadTwynData();
+    startPresenceHeartbeat();
+    if (!hasFinishedOnboarding()) {
+      showOnboarding();
+    }
     if (state.settings.notifPush) {
       if (typeof Notification !== "undefined" && Notification.permission === "denied") {
         state.settings.notifPush = false;
@@ -3058,6 +3252,18 @@ function escapeHTML(value) {
 function escapeAttribute(value) {
   return escapeHTML(String(value ?? "")).replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
+
+
+document.getElementById("saveProfile")?.addEventListener("click", async () => {
+  // cloud mark applied inside existing handler if present; ensure name has cloud before save races
+  const nameEl = document.getElementById("editName");
+  const cloudEl = document.getElementById("editCloud");
+  if (nameEl && cloudEl) {
+    const base = nameEl.value.replace(/\s*☁️\s*/g, " ").trim();
+    nameEl.value = withCloudName(base, cloudEl.checked);
+    state.hasCloudMark = cloudEl.checked;
+  }
+}, true);
 
 updateAuthMode();
 initializeAuth();
