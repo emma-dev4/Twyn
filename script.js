@@ -1,6 +1,6 @@
 /* =========================================================
    TWYN — COMPLETE SCRIPT.JS
-   V22 — Onboarding + cloud name + presence + haptics + full chat space
+   V23 — Scroll sheets + tommyy verified + invite + real reach + seen receipts
    ========================================================= */
 
 let authMode = "signup";
@@ -47,7 +47,6 @@ const state = {
   isLoadingMore: false,
   viewingUserId: null,
   onboardingDone: false,
-  hasCloudMark: false,
   lastActivitySeenAt: null
 };
 
@@ -93,6 +92,34 @@ const editPostModal = document.getElementById("editPostModal");
 /* ========== HELPERS ========== */
 function verifiedBadge(isVerified) {
   return isVerified ? `<span class="verified-badge" title="Verified"></span>` : "";
+}
+
+
+function getInviteLink() {
+  const base = location.origin + location.pathname.replace(/index\.html$/i, "");
+  const clean = base.endsWith("/") ? base : base + "/";
+  const ref = state.profile?.username || currentUser?.id?.slice(0, 8) || "twyn";
+  return `${clean}?ref=${encodeURIComponent(ref)}`;
+}
+
+async function shareInviteLink() {
+  const link = getInviteLink();
+  try {
+    if (navigator.share) {
+      await navigator.share({
+        title: "Join me on Twyn",
+        text: "Come hang on Twyn — social, reimagined.",
+        url: link
+      });
+      return;
+    }
+  } catch {}
+  try {
+    await navigator.clipboard.writeText(link);
+    alert("Invite link copied!\n" + link);
+  } catch {
+    prompt("Copy this invite link:", link);
+  }
 }
 
 function haptic(ms = 12) {
@@ -174,9 +201,7 @@ function showOnboarding() {
   const el = document.getElementById("onboardingScreen");
   if (el) el.classList.remove("hidden");
   const nameInput = document.getElementById("obName");
-  if (nameInput) nameInput.value = (state.profile.name || "").replace(/\s*☁️\s*/g, " ").trim();
-  const cloud = document.getElementById("obCloud");
-  if (cloud) cloud.checked = state.hasCloudMark || detectCloudMark(state.profile.name);
+  if (nameInput) nameInput.value = state.profile.name || "";
   goOnboardingStep(0);
 }
 
@@ -198,10 +223,7 @@ let onboardingStep = 0;
 document.querySelectorAll("[data-ob-next]").forEach((btn) => {
   btn.addEventListener("click", async () => {
     if (onboardingStep === 1) {
-      const raw = document.getElementById("obName")?.value.trim() || state.profile.name || "Twyn User";
-      const wantCloud = !!document.getElementById("obCloud")?.checked;
-      const displayName = withCloudName(raw, wantCloud);
-      state.hasCloudMark = wantCloud;
+      const displayName = document.getElementById("obName")?.value.trim() || state.profile.name || "Twyn User";
       try {
         if (currentUser) {
           await supabaseClient
@@ -539,6 +561,7 @@ if (authForm) {
       currentUser = result.user;
       await ensureProfile();
       await loadCurrentProfile();
+      await ensureTommyyVerified();
       showApp();
       await loadTwynData();
       startPresenceHeartbeat();
@@ -631,16 +654,38 @@ async function loadCurrentProfile() {
   setProfileState(data);
 }
 
+
+async function ensureTommyyVerified() {
+  if (!currentUser) return;
+  const u = state.profile?.username || "";
+  if (!isTommyyUsername(u)) return;
+  if (state.profile.is_verified) return;
+  try {
+    await supabaseClient.from("profiles").update({ is_verified: true }).eq("id", currentUser.id);
+    state.profile.is_verified = true;
+    updateProfileUI();
+  } catch {}
+}
+
+function isTommyyUsername(username) {
+  return String(username || "").toLowerCase().replace(/^@/, "") === "tommyy";
+}
+
+function isVerifiedProfile(data) {
+  if (!data) return false;
+  if (isTommyyUsername(data.username)) return true;
+  return !!data.is_verified;
+}
+
 function setProfileState(data) {
   const displayName = data.display_name || "Twyn User";
-  state.hasCloudMark = detectCloudMark(displayName);
   state.profile = {
     name: displayName,
     username: data.username || "twynuser",
     bio: data.bio || "",
     avatar_url: data.avatar_url || null,
     cover_url: data.cover_url || null,
-    is_verified: !!data.is_verified,
+    is_verified: isVerifiedProfile(data),
     last_seen_at: data.last_seen_at || null
   };
   updateProfileUI();
@@ -703,11 +748,9 @@ function updateProfileUI() {
   const editName = document.getElementById("editName");
   const editUsername = document.getElementById("editUsername");
   const editBio = document.getElementById("editBio");
-  if (editName) editName.value = String(name).replace(/\s*☁️\s*/g, " ").trim();
+  if (editName) editName.value = name;
   if (editUsername) editUsername.value = username;
   if (editBio) editBio.value = bio;
-  const editCloud = document.getElementById("editCloud");
-  if (editCloud) editCloud.checked = state.hasCloudMark || detectCloudMark(name);
 
   const presenceEl = document.getElementById("profilePresence");
   if (presenceEl) {
@@ -891,7 +934,7 @@ async function openUserProfile(userId) {
       username,
       avatar: name.charAt(0).toUpperCase(),
       avatarUrl: profile.avatar_url || null,
-      isVerified: !!profile.is_verified,
+      isVerified: isVerifiedProfile(profile),
       text: post.content || "",
       image: post.image_url || null,
       world: post.world || "general",
@@ -948,6 +991,38 @@ async function loadTwynData() {
 }
 
 /* ========== POSTS ========== */
+
+async function recordPostView(postId) {
+  if (!currentUser || !postId) return;
+  try {
+    await supabaseClient.from("post_views").upsert(
+      { post_id: postId, user_id: currentUser.id },
+      { onConflict: "post_id,user_id", ignoreDuplicates: true }
+    );
+  } catch {}
+}
+
+async function loadReachForPosts(posts) {
+  if (!posts?.length) return;
+  const ids = posts.map((p) => p.id).filter(Boolean);
+  if (!ids.length) return;
+  try {
+    const { data } = await supabaseClient
+      .from("post_views")
+      .select("post_id")
+      .in("post_id", ids);
+    const counts = {};
+    (data || []).forEach((row) => {
+      counts[row.post_id] = (counts[row.post_id] || 0) + 1;
+    });
+    posts.forEach((p) => {
+      p.reach = counts[p.id] || 0;
+    });
+  } catch (err) {
+    console.error("reach load", err);
+  }
+}
+
 async function loadPosts({ reset = false } = {}) {
   if (state.isLoadingMore) return;
 
@@ -1010,7 +1085,7 @@ async function loadPosts({ reset = false } = {}) {
       data = fallback.data;
     }
 
-    processPosts(data || [], reset);
+    await await processPosts(data || [], reset);
 
     if (!data || data.length < PAGE_SIZE) state.feedHasMore = false;
     else state.feedPage += 1;
@@ -1022,7 +1097,7 @@ async function loadPosts({ reset = false } = {}) {
   }
 }
 
-function processPosts(data, reset = false) {
+async function processPosts(data, reset = false) {
   const newPosts = (data || []).map((post) => {
     const likes = post.likes || [];
     const comments = post.comments || [];
@@ -1038,7 +1113,7 @@ function processPosts(data, reset = false) {
       username: post.profiles?.username || "twynuser",
       avatar: displayName.charAt(0).toUpperCase() || "T",
       avatarUrl: post.profiles?.avatar_url || null,
-      isVerified: !!post.profiles?.is_verified,
+      isVerified: isVerifiedProfile(post.profiles),
       text: post.content || "",
       image: post.image_url || null,
       world: post.world || "general",
@@ -1059,6 +1134,13 @@ function processPosts(data, reset = false) {
     const existingIds = new Set(state.posts.map((p) => p.id));
     state.posts = [...state.posts, ...newPosts.filter((p) => !existingIds.has(p.id))];
   }
+
+  await loadReachForPosts(state.posts);
+  state.posts.forEach((p) => {
+    if (currentUser && String(p.userId) !== String(currentUser.id)) {
+      recordPostView(p.id);
+    }
+  });
 }
 
 function formatPostTime(timestamp) {
@@ -1943,7 +2025,7 @@ async function loadPeople() {
       username: p.username || "twynuser",
       avatar: name.charAt(0).toUpperCase(),
       avatarUrl: p.avatar_url || null,
-      isVerified: !!p.is_verified,
+      isVerified: isVerifiedProfile(p),
       following: followingIds.has(p.id)
     };
   });
@@ -2116,10 +2198,7 @@ if (coverInput) {
 
 document.getElementById("saveProfile")?.addEventListener("click", async () => {
   if (!currentUser) return;
-  let newName = document.getElementById("editName")?.value.trim() || "";
-  const wantCloud = !!document.getElementById("editCloud")?.checked;
-  newName = withCloudName(newName, wantCloud);
-  state.hasCloudMark = wantCloud;
+  const newName = document.getElementById("editName")?.value.trim() || "";
   const newUsername = (document.getElementById("editUsername")?.value.trim().toLowerCase().replace(/[^a-z0-9_]/g, "") || "").slice(0, 20);
   const newBio = document.getElementById("editBio")?.value.trim() || "";
   if (!newName || !newUsername) return alert("Name and username are required.");
@@ -2619,7 +2698,7 @@ async function openChat(userId) {
         username: p.username || "user",
         avatar: name.charAt(0).toUpperCase(),
         avatarUrl: p.avatar_url || null,
-        isVerified: !!p.is_verified,
+        isVerified: isVerifiedProfile(p),
         following: false
       };
       state.people.push(person);
@@ -3104,7 +3183,7 @@ async function handleRealtimeNewPost(payload) {
     username: data.profiles?.username || "twynuser",
     avatar: displayName.charAt(0).toUpperCase() || "T",
     avatarUrl: data.profiles?.avatar_url || null,
-    isVerified: !!data.profiles?.is_verified,
+    isVerified: isVerifiedProfile(data.profiles),
     text: data.content || "",
     image: data.image_url || null,
     world: data.world || "general",
@@ -3221,6 +3300,7 @@ async function initializeAuth() {
     currentUser = user;
     await ensureProfile();
     await loadCurrentProfile();
+    await ensureTommyyVerified();
     showApp();
     await loadTwynData();
     startPresenceHeartbeat();
@@ -3254,16 +3334,30 @@ function escapeAttribute(value) {
 }
 
 
-document.getElementById("saveProfile")?.addEventListener("click", async () => {
-  // cloud mark applied inside existing handler if present; ensure name has cloud before save races
-  const nameEl = document.getElementById("editName");
-  const cloudEl = document.getElementById("editCloud");
-  if (nameEl && cloudEl) {
-    const base = nameEl.value.replace(/\s*☁️\s*/g, " ").trim();
-    nameEl.value = withCloudName(base, cloudEl.checked);
-    state.hasCloudMark = cloudEl.checked;
-  }
+
+function lockBodyScroll(lock) {
+  document.body.style.overflow = lock ? "hidden" : "";
+  document.body.style.touchAction = lock ? "none" : "";
+}
+document.getElementById("editProfileBtn")?.addEventListener("click", () => {
+  setTimeout(() => {
+    if (!document.getElementById("profileModal")?.classList.contains("hidden")) {
+      lockBodyScroll(true);
+    }
+  }, 0);
 }, true);
+document.getElementById("closeProfile")?.addEventListener("click", () => lockBodyScroll(false));
+document.getElementById("profileBackdrop")?.addEventListener("click", () => lockBodyScroll(false));
+document.getElementById("saveProfile")?.addEventListener("click", () => {
+  setTimeout(() => {
+    if (document.getElementById("profileModal")?.classList.contains("hidden")) {
+      lockBodyScroll(false);
+    }
+  }, 300);
+});
+
+document.getElementById("settingsInvite")?.addEventListener("click", () => shareInviteLink());
+document.getElementById("obShareInvite")?.addEventListener("click", () => shareInviteLink());
 
 updateAuthMode();
 initializeAuth();
