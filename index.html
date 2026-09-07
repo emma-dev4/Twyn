@@ -154,7 +154,7 @@
             <div class="avatar" id="createAvatar">Y</div>
             <div><strong id="createName">Your Name</strong><span id="createUsername">@yourname</span></div>
           </div>
-          <textarea id="postText" maxlength="500" placeholder="What's on your mind?"></textarea>
+          <textarea id="postText" maxlength="500" placeholder="What's on your mind? Tag with @username"></textarea>
           <div class="create-preview" id="createPreview"></div>
           <div class="create-tools">
             <label class="tool-btn"><input type="file" id="imageInput" accept="image/*" hidden /><span>＋</span> Photo</label>
@@ -308,6 +308,13 @@
     <img id="storyViewerImage" alt="Story" />
     <button type="button" class="story-nav story-prev" id="storyPrev" aria-label="Previous"></button>
     <button type="button" class="story-nav story-next" id="storyNext" aria-label="Next"></button>
+    <div class="story-viewer-bottom">
+      <button type="button" class="story-like-btn" id="storyLikeBtn">♡ <span id="storyLikeCount">0</span></button>
+      <div class="story-reply-row">
+        <input type="text" id="storyReplyInput" placeholder="Reply to story..." maxlength="300" />
+        <button type="button" id="storyReplySend">Send</button>
+      </div>
+    </div>
   </div>
 
   <div class="modal hidden" id="analysisModal">
