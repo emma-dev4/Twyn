@@ -1,6 +1,6 @@
 /* =========================================================
    TWYN — COMPLETE SCRIPT.JS
-   V24 — Stories + smooth in-place updates (no feed glitch)
+   V25 — Fix replies toggle + soft stories errors
    ========================================================= */
 
 let authMode = "signup";
@@ -1224,7 +1224,9 @@ function renderCategorySelector() {
 function updatePostCardUI(postId) {
   const post = state.posts.find((p) => String(p.id) === String(postId));
   if (!post) return;
-  document.querySelectorAll(`.post[data-id="${CSS.escape(String(postId))}"]`).forEach((card) => {
+  const sid = String(postId);
+  document.querySelectorAll("article.post").forEach((card) => {
+    if (String(card.dataset.id) !== sid) return;
     const likeBtn = card.querySelector('[data-action="like"]');
     if (likeBtn) {
       likeBtn.classList.toggle("liked", !!post.liked);
@@ -1250,9 +1252,9 @@ function updatePostCardUI(postId) {
       reach.textContent = `${post.reach.toLocaleString()} reach`;
     }
     // comments open state
-    const cbox = card.querySelector(`[data-comments-for="${CSS.escape(String(postId))}"]`);
-    if (cbox) {
-      const open = state.openComments.has(String(postId));
+    const cbox = card.querySelector("[data-comments-for]");
+    if (cbox && String(cbox.getAttribute("data-comments-for")) === sid) {
+      const open = state.openComments.has(sid);
       cbox.classList.toggle("hidden", !open);
       if (open) {
         const list = cbox.querySelector(".comments-list");
@@ -1413,7 +1415,7 @@ function renderSingleComment(comment, post, allComments, depth = 0) {
 
   let repliesBlock = "";
   if (replies.length && depth === 0) {
-    repliesBlock = `<button type="button" class="replies-toggle" data-action="toggle-replies" data-comment-id="${escapeAttribute(comment.id)}">
+    repliesBlock = `<button type="button" class="replies-toggle" data-action="toggle-replies" data-comment-id="${escapeAttribute(comment.id)}" data-post-id="${escapeAttribute(post.id)}">
           ${repliesOpen ? "Hide" : "View"} ${replies.length} ${replies.length === 1 ? "reply" : "replies"}
         </button>
         <div class="replies ${repliesOpen ? "" : "collapsed"}" data-replies-for="${escapeAttribute(comment.id)}">
@@ -1511,12 +1513,14 @@ async function handlePostClick(event) {
 
     if (action === "comment" && post) {
       const key = String(post.id);
-      if (state.openComments.has(key)) state.openComments.delete(key);
-      else {
+      if (state.openComments.has(key)) {
+        state.openComments.delete(key);
+        updatePostCardUI(post.id);
+      } else {
         state.openComments.add(key);
         await loadPostComments(post);
+        updatePostCardUI(post.id);
       }
-      updatePostCardUI(post.id);
       return;
     }
 
@@ -1585,7 +1589,11 @@ async function handlePostClick(event) {
       const key = `reply-${button.dataset.commentId}`;
       if (state.openReplies.has(key)) state.openReplies.delete(key);
       else state.openReplies.add(key);
-      updatePostCardUI(button.dataset.postId || id);
+      const postId =
+        button.dataset.postId ||
+        id ||
+        button.closest(".post")?.dataset?.id;
+      if (postId) updatePostCardUI(postId);
       return;
     }
 
@@ -1593,7 +1601,11 @@ async function handlePostClick(event) {
       const key = `thread-${button.dataset.commentId}`;
       if (state.openReplyThreads.has(key)) state.openReplyThreads.delete(key);
       else state.openReplyThreads.add(key);
-      updatePostCardUI(button.dataset.postId || id);
+      const postId =
+        button.dataset.postId ||
+        id ||
+        button.closest(".post")?.dataset?.id;
+      if (postId) updatePostCardUI(postId);
       return;
     }
 
@@ -3358,7 +3370,14 @@ async function loadStories() {
       .gte("created_at", since)
       .order("created_at", { ascending: false })
       .limit(80);
-    if (error) throw error;
+    if (error) {
+      // table missing or RLS — fail quietly
+      console.warn("stories unavailable:", error.message || error);
+      state.stories = [];
+      state.storyGroups = [];
+      renderStories();
+      return;
+    }
     state.stories = data || [];
     // group by user
     const map = new Map();
@@ -3525,7 +3544,12 @@ document.getElementById("storyInput")?.addEventListener("change", async (e) => {
     haptic(12);
     await loadStories();
   } catch (err) {
-    alert(err.message || "Could not post story. Create the stories table in Supabase.");
+    const msg = err.message || "";
+    if (/schema cache|Could not find the table/i.test(msg)) {
+      alert("Stories table not set up yet.\n\nIn Supabase → SQL, run the CREATE TABLE stories script, then try again.");
+    } else {
+      alert(msg || "Could not post story.");
+    }
   }
 });
 document.getElementById("storyViewerClose")?.addEventListener("click", closeStoryViewer);
