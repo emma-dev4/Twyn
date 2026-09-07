@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
   <title>Twyn — Social, Reimagined</title>
-
   <meta name="theme-color" content="#070708" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -14,62 +13,36 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
-
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
-
   <style>
-    .auth-screen {
-      position: fixed; inset: 0; z-index: 1000;
-      display: grid; place-items: center; padding: 20px; background: #070708;
-    }
-    .auth-screen.hidden { display: none; }
-    .auth-card {
-      width: min(420px, 100%); padding: 30px; background: #101012;
-      border: 1px solid rgba(255,255,255,.09); border-radius: 22px;
-      box-shadow: 0 30px 90px rgba(0,0,0,.55);
-    }
-    .auth-brand { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 28px; }
-    .auth-brand-mark {
-      width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px;
-      background: linear-gradient(135deg,#b84cff,#5d7cff); color: white; font-size: 20px; font-weight: 800;
-    }
-    .auth-brand-name { font-size: 25px; font-weight: 800; }
-    .auth-card h1 { text-align: center; font-size: 24px; margin-bottom: 7px; }
-    .auth-subtitle { text-align: center; color: #8f8f96; font-size: 13px; margin-bottom: 25px; }
-    .auth-field { margin-bottom: 15px; }
-    .auth-field label { display: block; margin-bottom: 7px; color: #b7b7bd; font-size: 12px; }
-    .auth-field input {
-      width: 100%; padding: 13px 14px; border: 1px solid rgba(255,255,255,.09);
-      border-radius: 12px; outline: none; color: white; background: #171719;
-    }
-    .auth-field input:focus { border-color: rgba(184,76,255,.6); }
-    .auth-submit {
-      width: 100%; margin-top: 5px; padding: 13px; border-radius: 12px;
-      background: linear-gradient(135deg,#b84cff,#5d7cff); color: white; font-weight: 700; cursor: pointer;
-    }
-    .auth-submit:disabled { opacity: .6; cursor: wait; }
-    .auth-switch { margin-top: 18px; text-align: center; color: #8f8f96; font-size: 12px; }
-    .auth-switch button { background: transparent; color: white; font-weight: 600; cursor: pointer; }
-    .auth-message { min-height: 18px; margin-top: 14px; text-align: center; color: #8f8f96; font-size: 12px; line-height: 1.5; }
-    .auth-message.error { color: #ff5475; }
-    .auth-message.success { color: #9dffbd; }
-    .logout-btn {
-      margin-top: 18px; padding: 8px 13px; border-radius: 10px; background: #171719;
-      color: #aaaab0; border: 1px solid rgba(255,255,255,.09); cursor: pointer;
-    }
+    .auth-screen{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:#070708}
+    .auth-screen.hidden{display:none}
+    .auth-card{width:min(420px,100%);padding:30px;background:#101012;border:1px solid rgba(255,255,255,.09);border-radius:22px;box-shadow:0 30px 90px rgba(0,0,0,.55)}
+    .auth-brand{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:28px}
+    .auth-brand-mark{width:40px;height:40px;display:grid;place-items:center;border-radius:12px;background:linear-gradient(135deg,#b84cff,#5d7cff);color:#fff;font-size:20px;font-weight:800}
+    .auth-brand-name{font-size:25px;font-weight:800}
+    .auth-card h1{text-align:center;font-size:24px;margin-bottom:7px}
+    .auth-subtitle{text-align:center;color:#8f8f96;font-size:13px;margin-bottom:25px}
+    .auth-field{margin-bottom:15px}
+    .auth-field label{display:block;margin-bottom:7px;color:#b7b7bd;font-size:12px}
+    .auth-field input{width:100%;padding:13px 14px;border:1px solid rgba(255,255,255,.09);border-radius:12px;outline:0;color:#fff;background:#171719}
+    .auth-field input:focus{border-color:rgba(184,76,255,.6)}
+    .auth-submit{width:100%;margin-top:5px;padding:13px;border-radius:12px;background:linear-gradient(135deg,#b84cff,#5d7cff);color:#fff;font-weight:700;cursor:pointer}
+    .auth-submit:disabled{opacity:.6;cursor:wait}
+    .auth-switch{margin-top:18px;text-align:center;color:#8f8f96;font-size:12px}
+    .auth-switch button{background:transparent;color:#fff;font-weight:600;cursor:pointer}
+    .auth-message{min-height:18px;margin-top:14px;text-align:center;color:#8f8f96;font-size:12px;line-height:1.5}
+    .auth-message.error{color:#ff5475}.auth-message.success{color:#9dffbd}
+    .logout-btn{margin-top:18px;padding:8px 13px;border-radius:10px;background:#171719;color:#aaaab0;border:1px solid rgba(255,255,255,.09);cursor:pointer}
   </style>
 </head>
 <body>
-
   <section class="auth-screen hidden" id="authScreen">
     <div class="auth-card">
-      <div class="auth-brand">
-        <div class="auth-brand-mark">T</div>
-        <div class="auth-brand-name">Twyn</div>
-      </div>
+      <div class="auth-brand"><div class="auth-brand-mark">T</div><div class="auth-brand-name">Twyn</div></div>
       <h1 id="authTitle">Welcome to Twyn</h1>
       <p class="auth-subtitle" id="authSubtitle">Create your account and join Twyn.</p>
       <form id="authForm">
@@ -95,7 +68,6 @@
     </div>
   </section>
 
-  <!-- ONBOARDING (no cloud option) -->
   <section class="onboarding-screen hidden" id="onboardingScreen">
     <div class="onboarding-card">
       <div class="onboarding-progress">
@@ -103,14 +75,12 @@
         <span class="ob-dot" data-ob-dot="1"></span>
         <span class="ob-dot" data-ob-dot="2"></span>
       </div>
-
       <div class="ob-step active" data-ob-step="0">
         <div class="ob-emoji">✨</div>
         <h2>Welcome to Twyn</h2>
-        <p>Social, reimagined. Posts, friends, and real chat — all in one place.</p>
+        <p>Social, reimagined. Posts, stories, friends, and real chat.</p>
         <button type="button" class="ob-next" data-ob-next>Continue</button>
       </div>
-
       <div class="ob-step" data-ob-step="1">
         <div class="ob-emoji">👤</div>
         <h2>Your name</h2>
@@ -119,7 +89,6 @@
         <input id="obName" type="text" maxlength="40" placeholder="Your name" />
         <button type="button" class="ob-next" data-ob-next>Continue</button>
       </div>
-
       <div class="ob-step" data-ob-step="2">
         <div class="ob-emoji">🔗</div>
         <h2>Invite friends</h2>
@@ -133,10 +102,7 @@
 
   <div class="app" id="twynApp">
     <header class="topbar">
-      <div class="brand">
-        <span class="brand-mark">T</span>
-        <span class="brand-name">Twyn</span>
-      </div>
+      <div class="brand"><span class="brand-mark">T</span><span class="brand-name">Twyn</span></div>
       <div class="top-actions">
         <button class="icon-btn" id="searchBtn" type="button" aria-label="Search">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l5 5"></path></svg>
@@ -154,25 +120,25 @@
     </section>
 
     <main class="main-content">
-
       <section class="page active" id="homePage">
         <div class="home-header">
-          <div>
-            <h1>TYP</h1>
-            <p>Twyn For You Page</p>
-          </div>
+          <div><h1>TYP</h1><p>Twyn For You Page</p></div>
         </div>
+        <!-- STORIES -->
+        <div class="stories-row" id="storiesRow">
+          <button type="button" class="story-item story-add" id="addStoryBtn">
+            <div class="story-ring"><div class="story-avatar" id="storyAddAvatar">+</div></div>
+            <span>Your story</span>
+          </button>
+          <div class="stories-list" id="storiesList"></div>
+        </div>
+        <input type="file" id="storyInput" accept="image/*" hidden />
         <div id="feed"></div>
         <div id="feedLoader" class="feed-loader hidden"></div>
       </section>
 
       <section class="page" id="friendsPage">
-        <div class="page-heading">
-          <div>
-            <h1>Friends</h1>
-            <p>People around your Twyn.</p>
-          </div>
-        </div>
+        <div class="page-heading"><div><h1>Friends</h1><p>People around your Twyn.</p></div></div>
         <div class="friend-tabs">
           <button class="friend-tab active" data-tab="followers" type="button">Followers</button>
           <button class="friend-tab" data-tab="following" type="button">Following</button>
@@ -182,27 +148,16 @@
       </section>
 
       <section class="page" id="createPage">
-        <div class="page-heading">
-          <div>
-            <h1>Create</h1>
-            <p>Share something with Twyn.</p>
-          </div>
-        </div>
+        <div class="page-heading"><div><h1>Create</h1><p>Share something with Twyn.</p></div></div>
         <div class="create-card">
           <div class="create-user">
             <div class="avatar" id="createAvatar">Y</div>
-            <div>
-              <strong id="createName">Your Name</strong>
-              <span id="createUsername">@yourname</span>
-            </div>
+            <div><strong id="createName">Your Name</strong><span id="createUsername">@yourname</span></div>
           </div>
           <textarea id="postText" maxlength="500" placeholder="What's on your mind?"></textarea>
           <div class="create-preview" id="createPreview"></div>
           <div class="create-tools">
-            <label class="tool-btn">
-              <input type="file" id="imageInput" accept="image/*" hidden />
-              <span>＋</span> Photo
-            </label>
+            <label class="tool-btn"><input type="file" id="imageInput" accept="image/*" hidden /><span>＋</span> Photo</label>
             <button class="tool-btn" id="hashtagBtn" type="button"><span>#</span> Hashtag</button>
           </div>
           <div class="create-bottom">
@@ -213,23 +168,14 @@
       </section>
 
       <section class="page" id="inboxPage">
-        <div class="page-heading" id="inboxHeading">
-          <div>
-            <h1>Inbox</h1>
-            <p>Likes, comments, follows, saves, and messages.</p>
-          </div>
-        </div>
+        <div class="page-heading" id="inboxHeading"><div><h1>Inbox</h1><p>Likes, comments, follows, saves, and messages.</p></div></div>
         <div class="inbox-tabs" id="inboxTabs">
           <button class="inbox-tab active" data-inbox="activity" type="button">Activity</button>
           <button class="inbox-tab" data-inbox="messages" type="button">Messages</button>
         </div>
-        <div class="inbox-panel" id="activityPanel">
-          <div class="inbox-list" id="activityList"></div>
-        </div>
+        <div class="inbox-panel" id="activityPanel"><div class="inbox-list" id="activityList"></div></div>
         <div class="inbox-panel hidden" id="messagesPanel">
-          <div class="messages-layout" id="messagesLayout">
-            <div class="conversations-list" id="conversationsList"></div>
-          </div>
+          <div class="messages-layout" id="messagesLayout"><div class="conversations-list" id="conversationsList"></div></div>
         </div>
       </section>
 
@@ -254,12 +200,7 @@
             <div><strong id="followerCount">0</strong><span>Followers</span></div>
             <div><strong id="followingCount">0</strong><span>Following</span></div>
           </div>
-          <div class="profile-worlds">
-            <h3>Your Worlds</h3>
-            <div class="profile-chips">
-              <span>Tech</span><span>Music</span><span>Gaming</span>
-            </div>
-          </div>
+          <div class="profile-worlds"><h3>Your Worlds</h3><div class="profile-chips"><span>Tech</span><span>Music</span><span>Gaming</span></div></div>
           <div class="profile-posts">
             <div class="profile-posts-header">
               <button class="active" type="button">Posts</button>
@@ -273,7 +214,7 @@
       </section>
 
       <section class="page" id="otherProfilePage">
-        <div class="page-heading" style="margin-bottom: 10px;">
+        <div class="page-heading" style="margin-bottom:10px">
           <button type="button" id="otherProfileBack" class="edit-profile-btn">← Back</button>
         </div>
         <div class="profile-cover" id="otherProfileCover"></div>
@@ -296,58 +237,23 @@
             <div><strong id="otherFollowerCount">0</strong><span>Followers</span></div>
             <div><strong id="otherFollowingCount">0</strong><span>Following</span></div>
           </div>
-          <div class="profile-posts" style="margin-top: 18px;">
-            <div id="otherProfileFeed"></div>
-          </div>
+          <div class="profile-posts" style="margin-top:18px"><div id="otherProfileFeed"></div></div>
         </div>
       </section>
 
       <section class="page" id="settingsPage">
-        <div class="page-heading">
-          <div>
-            <h1>Settings</h1>
-            <p>Manage your Twyn account.</p>
-          </div>
-        </div>
+        <div class="page-heading"><div><h1>Settings</h1><p>Manage your Twyn account.</p></div></div>
         <div class="settings-list">
-          <button class="settings-item" type="button" id="settingsEditProfile">
-            <span>Edit profile</span><span>›</span>
-          </button>
-          <button class="settings-item" type="button" id="settingsInvite">
-            <span>Invite friends</span><span>›</span>
-          </button>
-          <div class="settings-item toggle-item">
-            <span>Light mode</span>
-            <label class="switch">
-              <input type="checkbox" id="settingLightMode" />
-              <span class="slider"></span>
-            </label>
-          </div>
-          <div class="settings-item toggle-item">
-            <span>Push notifications</span>
-            <label class="switch"><input type="checkbox" id="settingNotifPush" checked /><span class="slider"></span></label>
-          </div>
-          <div class="settings-item toggle-item">
-            <span>Like notifications</span>
-            <label class="switch"><input type="checkbox" id="settingNotifLikes" checked /><span class="slider"></span></label>
-          </div>
-          <div class="settings-item toggle-item">
-            <span>Comment notifications</span>
-            <label class="switch"><input type="checkbox" id="settingNotifComments" checked /><span class="slider"></span></label>
-          </div>
-          <div class="settings-item toggle-item">
-            <span>Private account</span>
-            <label class="switch"><input type="checkbox" id="settingPrivate" /><span class="slider"></span></label>
-          </div>
-          <button class="settings-item" type="button" id="settingsChangePassword">
-            <span>Change password</span><span>›</span>
-          </button>
-          <button class="settings-item" type="button" id="settingsClearCache">
-            <span>Clear local cache</span><span>›</span>
-          </button>
-          <button class="settings-item danger" type="button" id="settingsLogout">
-            <span>Log out</span><span>›</span>
-          </button>
+          <button class="settings-item" type="button" id="settingsEditProfile"><span>Edit profile</span><span>›</span></button>
+          <button class="settings-item" type="button" id="settingsInvite"><span>Invite friends</span><span>›</span></button>
+          <div class="settings-item toggle-item"><span>Light mode</span><label class="switch"><input type="checkbox" id="settingLightMode" /><span class="slider"></span></label></div>
+          <div class="settings-item toggle-item"><span>Push notifications</span><label class="switch"><input type="checkbox" id="settingNotifPush" checked /><span class="slider"></span></label></div>
+          <div class="settings-item toggle-item"><span>Like notifications</span><label class="switch"><input type="checkbox" id="settingNotifLikes" checked /><span class="slider"></span></label></div>
+          <div class="settings-item toggle-item"><span>Comment notifications</span><label class="switch"><input type="checkbox" id="settingNotifComments" checked /><span class="slider"></span></label></div>
+          <div class="settings-item toggle-item"><span>Private account</span><label class="switch"><input type="checkbox" id="settingPrivate" /><span class="slider"></span></label></div>
+          <button class="settings-item" type="button" id="settingsChangePassword"><span>Change password</span><span>›</span></button>
+          <button class="settings-item" type="button" id="settingsClearCache"><span>Clear local cache</span><span>›</span></button>
+          <button class="settings-item danger" type="button" id="settingsLogout"><span>Log out</span><span>›</span></button>
         </div>
       </section>
     </main>
@@ -376,7 +282,6 @@
     </nav>
   </div>
 
-  <!-- FULL SCREEN CHAT -->
   <div class="chat-space hidden" id="chatSpace">
     <div class="chat-view" id="chatView">
       <div class="chat-header">
@@ -385,10 +290,7 @@
       </div>
       <div class="chat-messages" id="chatMessages"></div>
       <div class="chat-input-row">
-        <label class="chat-media-btn" title="Photo">
-          <input type="file" id="chatImageInput" accept="image/*" hidden />
-          📷
-        </label>
+        <label class="chat-media-btn" title="Photo"><input type="file" id="chatImageInput" accept="image/*" hidden />📷</label>
         <button type="button" class="chat-media-btn" id="chatVoiceBtn" title="Voice note">🎙</button>
         <input type="text" id="chatInput" placeholder="Message..." maxlength="1000" />
         <button type="button" id="sendMessageBtn">Send</button>
@@ -396,19 +298,24 @@
     </div>
   </div>
 
-  <!-- ANALYSIS -->
+  <!-- STORY VIEWER -->
+  <div class="story-viewer hidden" id="storyViewer">
+    <div class="story-viewer-top">
+      <div class="story-progress" id="storyProgress"></div>
+      <div class="story-viewer-user" id="storyViewerUser"></div>
+      <button type="button" class="story-viewer-close" id="storyViewerClose">×</button>
+    </div>
+    <img id="storyViewerImage" alt="Story" />
+    <button type="button" class="story-nav story-prev" id="storyPrev" aria-label="Previous"></button>
+    <button type="button" class="story-nav story-next" id="storyNext" aria-label="Next"></button>
+  </div>
+
   <div class="modal hidden" id="analysisModal">
     <div class="modal-backdrop"></div>
     <div class="analysis-modal">
-      <div class="modal-header">
-        <div><h2>Post Analysis</h2><span>Private analytics</span></div>
-        <button class="close-modal" id="closeAnalysis" type="button">×</button>
-      </div>
-      <div class="pulse-card">
-        <span>Pulse</span>
-        <strong id="pulseStatus">RP</strong>
-        <p id="pulseDescription">This post is gaining momentum.</p>
-      </div>
+      <div class="modal-header"><div><h2>Post Analysis</h2><span>Private analytics</span></div>
+        <button class="close-modal" id="closeAnalysis" type="button">×</button></div>
+      <div class="pulse-card"><span>Pulse</span><strong id="pulseStatus">RP</strong><p id="pulseDescription">This post is gaining momentum.</p></div>
       <div class="analytics-grid">
         <div class="analytics-item"><span>Engagement</span><strong id="analysisEngagement">0</strong></div>
         <div class="analytics-item"><span>Reach</span><strong id="analysisReach">0</strong></div>
@@ -418,37 +325,26 @@
     </div>
   </div>
 
-  <!-- EDIT PROFILE (scrollable sheet) -->
   <div class="modal hidden" id="profileModal">
     <div class="modal-backdrop" id="profileBackdrop"></div>
     <div class="edit-modal sheet-modal">
       <div class="sheet-handle"></div>
-      <div class="modal-header">
-        <div><h2>Edit profile</h2><span>Customize your profile</span></div>
-        <button class="close-modal" id="closeProfile" type="button">×</button>
-      </div>
+      <div class="modal-header"><div><h2>Edit profile</h2><span>Customize your profile</span></div>
+        <button class="close-modal" id="closeProfile" type="button">×</button></div>
       <div class="sheet-scroll">
         <div class="cover-edit-section">
           <div class="cover-edit-preview" id="editCoverPreview"></div>
-          <label class="avatar-upload-btn">
-            Change cover photo
-            <input type="file" id="coverInput" accept="image/*" hidden />
-          </label>
+          <label class="avatar-upload-btn">Change cover photo<input type="file" id="coverInput" accept="image/*" hidden /></label>
         </div>
         <div class="avatar-edit-section">
           <div class="avatar profile-avatar-edit" id="editAvatarPreview">Y</div>
-          <label class="avatar-upload-btn">
-            Change photo
-            <input type="file" id="avatarInput" accept="image/*" hidden />
-          </label>
+          <label class="avatar-upload-btn">Change photo<input type="file" id="avatarInput" accept="image/*" hidden /></label>
         </div>
         <label>Display name<input id="editName" value="Your Name" /></label>
         <label>Username<input id="editUsername" value="yourname" /></label>
         <label>Bio<textarea id="editBio">Building. Creating. Sharing.</textarea></label>
       </div>
-      <div class="sheet-footer">
-        <button class="save-profile-btn" id="saveProfile" type="button">Save changes</button>
-      </div>
+      <div class="sheet-footer"><button class="save-profile-btn" id="saveProfile" type="button">Save changes</button></div>
     </div>
   </div>
 
@@ -477,13 +373,8 @@
     <div class="modal-backdrop" id="editPostBackdrop"></div>
     <div class="edit-modal sheet-modal">
       <div class="sheet-handle"></div>
-      <div class="modal-header">
-        <div>
-          <h2>Edit post</h2>
-          <span>Update your post</span>
-        </div>
-        <button class="close-modal" id="closeEditPost" type="button">×</button>
-      </div>
+      <div class="modal-header"><div><h2>Edit post</h2><span>Update your post</span></div>
+        <button class="close-modal" id="closeEditPost" type="button">×</button></div>
       <div class="sheet-scroll">
         <textarea id="editPostText" maxlength="500" placeholder="What's on your mind?"></textarea>
         <div class="create-preview" id="editPostPreview"></div>
