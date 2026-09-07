@@ -1091,3 +1091,71 @@ body.light-mode .edit-modal.sheet-modal { background: #ffffff; }
 .post.updating {
   pointer-events: none;
 }
+
+/* Story like + reply bar */
+.story-viewer-bottom {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 14px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to top, rgba(0,0,0,.7), transparent);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.story-like-btn {
+  align-self: flex-start;
+  background: rgba(255,255,255,.12);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.story-like-btn.liked { color: #ff5475; background: rgba(255,84,117,.2); }
+.story-reply-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.story-reply-row input {
+  flex: 1;
+  padding: 12px 14px;
+  border-radius: 22px;
+  border: 1px solid rgba(255,255,255,.2);
+  background: rgba(255,255,255,.1);
+  color: #fff;
+  outline: none;
+}
+.story-reply-row input::placeholder { color: rgba(255,255,255,.55); }
+.story-reply-row button {
+  padding: 0 16px;
+  height: 42px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  font-weight: 600;
+  border: none;
+}
+
+/* Replies indent — one clear step to the right */
+.replies {
+  margin-top: 10px;
+  margin-left: 18px;
+  padding-left: 14px;
+  border-left: 2px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.replies.collapsed { display: none; }
+
+/* Mentions */
+.mention {
+  color: var(--accent-2);
+  font-weight: 600;
+  cursor: pointer;
+}
+.mention:hover { text-decoration: underline; }
