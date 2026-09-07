@@ -1400,7 +1400,7 @@ function renderSingleComment(comment, post, allComments, depth = 0) {
   const name = profile.display_name || "Twyn User";
   const username = profile.username || "twynuser";
   const avatar = name.charAt(0).toUpperCase();
-  const isVerified = !!profile.is_verified;
+  const isVerified = isVerifiedProfile(profile);
   const likes = comment.likes || [];
   const likedByMe = likes.some((l) => l.user_id === currentUser?.id);
   const replies = allComments.filter((c) => String(c.parent_id) === String(comment.id));
@@ -1680,6 +1680,7 @@ async function submitComment(post, button) {
     input.value = "";
     updatePostCardUI(post.id);
     loadNotifications();
+    await notifyMentions(text, "in a comment");
     if (post.userId && String(post.userId) !== String(currentUser.id)) {
       sendPushToUser(
         post.userId,
@@ -2023,6 +2024,8 @@ document.getElementById("publishBtn")?.addEventListener("click", async () => {
       .select()
       .single();
     if (error) throw error;
+
+    await notifyMentions(text, "in a post");
 
     state.posts.unshift({
       id: data.id,
@@ -3416,34 +3419,54 @@ async function loadStories() {
 function renderStories() {
   const list = document.getElementById("storiesList");
   if (!list) return;
+  const addBtn = document.getElementById("addStoryBtn");
   const addAv = document.getElementById("storyAddAvatar");
-  if (addAv && state.profile.avatar_url) {
-    addAv.innerHTML = `<img src="${escapeAttribute(state.profile.avatar_url)}" alt="">`;
-  } else if (addAv) {
-    addAv.textContent = "+";
+  const own = state.storyGroups.find((g) => String(g.userId) === String(currentUser?.id));
+
+  if (addAv) {
+    if (state.profile.avatar_url) {
+      addAv.innerHTML = `<img src="${escapeAttribute(state.profile.avatar_url)}" alt="">`;
+    } else {
+      addAv.textContent = "+";
+    }
+  }
+  if (addBtn) {
+    const label = addBtn.querySelector("span");
+    if (label) label.textContent = own ? "Your story" : "Your story";
+    // long-press / second click on ring opens own stories if any
+    addBtn.onclick = () => {
+      if (own && own.items.length) {
+        openStoryGroup(state.storyGroups.findIndex((g) => String(g.userId) === String(currentUser.id)));
+      } else {
+        document.getElementById("storyInput")?.click();
+      }
+    };
+    // double-tap Your story to add another
+    addBtn.ondblclick = (e) => {
+      e.preventDefault();
+      document.getElementById("storyInput")?.click();
+    };
   }
 
-  const others = state.storyGroups.filter((g) => String(g.userId) !== String(currentUser?.id));
-  if (!others.length) {
-    list.innerHTML = "";
-    return;
-  }
-  list.innerHTML = others
-    .map((g, idx) => {
+  // show everyone including self in horizontal list after the add button
+  const groups = state.storyGroups;
+  list.innerHTML = groups
+    .map((g) => {
       const seenKey = `story_seen_${g.userId}`;
       let seen = false;
       try { seen = sessionStorage.getItem(seenKey) === "1"; } catch {}
+      const isOwn = String(g.userId) === String(currentUser?.id);
       const initial = (g.name || "U").charAt(0).toUpperCase();
-      return `<button type="button" class="story-item" data-story-group="${idx + (state.storyGroups[0] && String(state.storyGroups[0].userId) === String(currentUser?.id) ? 1 : 0)}" data-user-id="${escapeAttribute(g.userId)}">
+      const name = isOwn ? "You" : (g.name || "User").split(" ")[0];
+      return `<button type="button" class="story-item" data-user-id="${escapeAttribute(g.userId)}">
         <div class="story-ring ${seen ? "seen" : ""}">
           <div class="story-avatar">${g.avatarUrl ? `<img src="${escapeAttribute(g.avatarUrl)}" alt="">` : escapeHTML(initial)}</div>
         </div>
-        <span>${escapeHTML(g.name.split(" ")[0])}</span>
+        <span>${escapeHTML(name)}</span>
       </button>`;
     })
     .join("");
 
-  // fix indices: use user id click
   list.querySelectorAll(".story-item").forEach((btn) => {
     btn.addEventListener("click", () => {
       const uid = btn.dataset.userId;
@@ -3469,13 +3492,14 @@ function closeStoryViewer() {
   document.getElementById("storyViewer")?.classList.add("hidden");
 }
 
-function showActiveStory() {
+async function showActiveStory() {
   const group = state.storyGroups[state.activeStoryGroup];
   if (!group) return closeStoryViewer();
   const item = group.items[state.activeStoryIndex];
   if (!item) return closeStoryViewer();
 
   try { sessionStorage.setItem(`story_seen_${group.userId}`, "1"); } catch {}
+  state.activeStoryId = item.id;
 
   const img = document.getElementById("storyViewerImage");
   const userEl = document.getElementById("storyViewerUser");
@@ -3495,8 +3519,86 @@ function showActiveStory() {
       .join("");
   }
 
+  await refreshStoryLikeUI(item.id);
+
   if (state.storyTimer) clearTimeout(state.storyTimer);
   state.storyTimer = setTimeout(() => storyNext(), 5000);
+}
+
+async function refreshStoryLikeUI(storyId) {
+  const btn = document.getElementById("storyLikeBtn");
+  const countEl = document.getElementById("storyLikeCount");
+  if (!btn || !storyId) return;
+  try {
+    const { data: likes } = await supabaseClient
+      .from("story_likes")
+      .select("user_id")
+      .eq("story_id", storyId);
+    const list = likes || [];
+    const liked = list.some((l) => String(l.user_id) === String(currentUser?.id));
+    btn.classList.toggle("liked", liked);
+    btn.innerHTML = `${liked ? "♥" : "♡"} <span id="storyLikeCount">${list.length}</span>`;
+  } catch {
+    if (countEl) countEl.textContent = "0";
+  }
+}
+
+async function toggleStoryLike() {
+  if (!currentUser || !state.activeStoryId) return;
+  const storyId = state.activeStoryId;
+  const btn = document.getElementById("storyLikeBtn");
+  try {
+    const { data: existing } = await supabaseClient
+      .from("story_likes")
+      .select("id")
+      .eq("story_id", storyId)
+      .eq("user_id", currentUser.id)
+      .maybeSingle();
+    if (existing) {
+      await supabaseClient.from("story_likes").delete().eq("id", existing.id);
+    } else {
+      await supabaseClient.from("story_likes").insert({ story_id: storyId, user_id: currentUser.id });
+      haptic(12);
+      popEl(btn);
+      const group = state.storyGroups[state.activeStoryGroup];
+      if (group && String(group.userId) !== String(currentUser.id)) {
+        sendPushToUser(group.userId, "Twyn", `${state.profile.name || "Someone"} liked your story`);
+      }
+    }
+    await refreshStoryLikeUI(storyId);
+  } catch (err) {
+    const msg = err.message || "";
+    if (/schema cache|Could not find the table/i.test(msg)) {
+      alert("Run the story_likes SQL in Supabase first.");
+    }
+  }
+}
+
+async function sendStoryReply() {
+  if (!currentUser || !state.activeStoryId) return;
+  const input = document.getElementById("storyReplyInput");
+  const text = input?.value.trim();
+  if (!text) return;
+  try {
+    const { error } = await supabaseClient.from("story_replies").insert({
+      story_id: state.activeStoryId,
+      user_id: currentUser.id,
+      content: text
+    });
+    if (error) throw error;
+    if (input) input.value = "";
+    haptic(10);
+    const group = state.storyGroups[state.activeStoryGroup];
+    if (group && String(group.userId) !== String(currentUser.id)) {
+      sendPushToUser(group.userId, "Twyn", `${state.profile.name || "Someone"} replied to your story: ${text.slice(0, 60)}`);
+    }
+    await notifyMentions(text, "in a story reply");
+  } catch (err) {
+    const msg = err.message || "";
+    if (/schema cache|Could not find the table/i.test(msg)) {
+      alert("Run the story_replies SQL in Supabase first.");
+    } else alert(msg || "Could not send reply");
+  }
 }
 
 function storyNext() {
@@ -3525,9 +3627,7 @@ function storyPrev() {
   }
 }
 
-document.getElementById("addStoryBtn")?.addEventListener("click", () => {
-  document.getElementById("storyInput")?.click();
-});
+// addStoryBtn click is bound in renderStories (open own story or pick photo)
 document.getElementById("storyInput")?.addEventListener("change", async (e) => {
   const file = e.target.files?.[0];
   e.target.value = "";
@@ -3555,6 +3655,14 @@ document.getElementById("storyInput")?.addEventListener("change", async (e) => {
 document.getElementById("storyViewerClose")?.addEventListener("click", closeStoryViewer);
 document.getElementById("storyNext")?.addEventListener("click", storyNext);
 document.getElementById("storyPrev")?.addEventListener("click", storyPrev);
+document.getElementById("storyLikeBtn")?.addEventListener("click", (e) => { e.stopPropagation(); toggleStoryLike(); });
+document.getElementById("storyReplySend")?.addEventListener("click", (e) => { e.stopPropagation(); sendStoryReply(); });
+document.getElementById("storyReplyInput")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); sendStoryReply(); }
+});
+document.getElementById("storyReplyInput")?.addEventListener("focus", () => {
+  if (state.storyTimer) { clearTimeout(state.storyTimer); state.storyTimer = null; }
+});
 
 
 /* ========== INIT ========== */
