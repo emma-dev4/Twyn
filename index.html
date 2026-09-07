@@ -2,10 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
   <title>Twyn — Social, Reimagined</title>
 
-  <!-- PWA -->
   <meta name="theme-color" content="#070708" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -65,7 +64,6 @@
 </head>
 <body>
 
-  <!-- AUTH -->
   <section class="auth-screen hidden" id="authScreen">
     <div class="auth-card">
       <div class="auth-brand">
@@ -97,7 +95,7 @@
     </div>
   </section>
 
-  <!-- ONBOARDING -->
+  <!-- ONBOARDING (no cloud option) -->
   <section class="onboarding-screen hidden" id="onboardingScreen">
     <div class="onboarding-card">
       <div class="onboarding-progress">
@@ -107,36 +105,32 @@
       </div>
 
       <div class="ob-step active" data-ob-step="0">
-        <div class="ob-emoji">☁️</div>
+        <div class="ob-emoji">✨</div>
         <h2>Welcome to Twyn</h2>
         <p>Social, reimagined. Posts, friends, and real chat — all in one place.</p>
         <button type="button" class="ob-next" data-ob-next>Continue</button>
       </div>
 
       <div class="ob-step" data-ob-step="1">
-        <div class="ob-emoji">✨</div>
-        <h2>Your identity</h2>
-        <p>Pick how you show up. Early members can claim the cloud mark.</p>
+        <div class="ob-emoji">👤</div>
+        <h2>Your name</h2>
+        <p>This is how people will see you on Twyn.</p>
         <label class="ob-label">Display name</label>
         <input id="obName" type="text" maxlength="40" placeholder="Your name" />
-        <label class="ob-cloud-row">
-          <input type="checkbox" id="obCloud" />
-          <span>Add ☁️ cloud mark to my name</span>
-        </label>
         <button type="button" class="ob-next" data-ob-next>Continue</button>
       </div>
 
       <div class="ob-step" data-ob-step="2">
-        <div class="ob-emoji">🔔</div>
-        <h2>Stay in the loop</h2>
-        <p>Turn on notifications for likes, comments, follows, and messages.</p>
-        <button type="button" class="ob-next" id="obEnablePush">Enable notifications</button>
-        <button type="button" class="ob-skip" id="obFinish">Maybe later — enter Twyn</button>
+        <div class="ob-emoji">🔗</div>
+        <h2>Invite friends</h2>
+        <p>Share Twyn with people you want on your timeline.</p>
+        <button type="button" class="ob-next" id="obShareInvite">Copy invite link</button>
+        <button type="button" class="ob-next" id="obEnablePush" style="margin-top:10px">Enable notifications</button>
+        <button type="button" class="ob-skip" id="obFinish">Enter Twyn</button>
       </div>
     </div>
   </section>
 
-  <!-- APP -->
   <div class="app" id="twynApp">
     <header class="topbar">
       <div class="brand">
@@ -161,7 +155,6 @@
 
     <main class="main-content">
 
-      <!-- HOME -->
       <section class="page active" id="homePage">
         <div class="home-header">
           <div>
@@ -173,7 +166,6 @@
         <div id="feedLoader" class="feed-loader hidden"></div>
       </section>
 
-      <!-- FRIENDS -->
       <section class="page" id="friendsPage">
         <div class="page-heading">
           <div>
@@ -189,7 +181,6 @@
         <div id="friendsContent"></div>
       </section>
 
-      <!-- CREATE -->
       <section class="page" id="createPage">
         <div class="page-heading">
           <div>
@@ -212,9 +203,7 @@
               <input type="file" id="imageInput" accept="image/*" hidden />
               <span>＋</span> Photo
             </label>
-            <button class="tool-btn" id="hashtagBtn" type="button">
-              <span>#</span> Hashtag
-            </button>
+            <button class="tool-btn" id="hashtagBtn" type="button"><span>#</span> Hashtag</button>
           </div>
           <div class="create-bottom">
             <span id="characterCount">0 / 500</span>
@@ -223,7 +212,6 @@
         </div>
       </section>
 
-      <!-- INBOX -->
       <section class="page" id="inboxPage">
         <div class="page-heading" id="inboxHeading">
           <div>
@@ -231,16 +219,13 @@
             <p>Likes, comments, follows, saves, and messages.</p>
           </div>
         </div>
-
         <div class="inbox-tabs" id="inboxTabs">
           <button class="inbox-tab active" data-inbox="activity" type="button">Activity</button>
           <button class="inbox-tab" data-inbox="messages" type="button">Messages</button>
         </div>
-
         <div class="inbox-panel" id="activityPanel">
           <div class="inbox-list" id="activityList"></div>
         </div>
-
         <div class="inbox-panel hidden" id="messagesPanel">
           <div class="messages-layout" id="messagesLayout">
             <div class="conversations-list" id="conversationsList"></div>
@@ -248,7 +233,6 @@
         </div>
       </section>
 
-      <!-- OWN PROFILE -->
       <section class="page" id="profilePage">
         <div class="profile-cover" id="profileCover"></div>
         <div class="profile-main">
@@ -288,7 +272,6 @@
         </div>
       </section>
 
-      <!-- OTHER USER PROFILE -->
       <section class="page" id="otherProfilePage">
         <div class="page-heading" style="margin-bottom: 10px;">
           <button type="button" id="otherProfileBack" class="edit-profile-btn">← Back</button>
@@ -319,7 +302,6 @@
         </div>
       </section>
 
-      <!-- SETTINGS -->
       <section class="page" id="settingsPage">
         <div class="page-heading">
           <div>
@@ -330,6 +312,9 @@
         <div class="settings-list">
           <button class="settings-item" type="button" id="settingsEditProfile">
             <span>Edit profile</span><span>›</span>
+          </button>
+          <button class="settings-item" type="button" id="settingsInvite">
+            <span>Invite friends</span><span>›</span>
           </button>
           <div class="settings-item toggle-item">
             <span>Light mode</span>
@@ -391,7 +376,7 @@
     </nav>
   </div>
 
-  <!-- FULL-SCREEN CHAT (own layer — leaves inbox behind) -->
+  <!-- FULL SCREEN CHAT -->
   <div class="chat-space hidden" id="chatSpace">
     <div class="chat-view" id="chatView">
       <div class="chat-header">
@@ -411,7 +396,7 @@
     </div>
   </div>
 
-  <!-- ANALYSIS MODAL -->
+  <!-- ANALYSIS -->
   <div class="modal hidden" id="analysisModal">
     <div class="modal-backdrop"></div>
     <div class="analysis-modal">
@@ -433,40 +418,40 @@
     </div>
   </div>
 
-  <!-- EDIT PROFILE -->
+  <!-- EDIT PROFILE (scrollable sheet) -->
   <div class="modal hidden" id="profileModal">
-    <div class="modal-backdrop"></div>
-    <div class="edit-modal">
+    <div class="modal-backdrop" id="profileBackdrop"></div>
+    <div class="edit-modal sheet-modal">
+      <div class="sheet-handle"></div>
       <div class="modal-header">
         <div><h2>Edit profile</h2><span>Customize your profile</span></div>
         <button class="close-modal" id="closeProfile" type="button">×</button>
       </div>
-      <div class="cover-edit-section">
-        <div class="cover-edit-preview" id="editCoverPreview"></div>
-        <label class="avatar-upload-btn">
-          Change cover photo
-          <input type="file" id="coverInput" accept="image/*" hidden />
-        </label>
+      <div class="sheet-scroll">
+        <div class="cover-edit-section">
+          <div class="cover-edit-preview" id="editCoverPreview"></div>
+          <label class="avatar-upload-btn">
+            Change cover photo
+            <input type="file" id="coverInput" accept="image/*" hidden />
+          </label>
+        </div>
+        <div class="avatar-edit-section">
+          <div class="avatar profile-avatar-edit" id="editAvatarPreview">Y</div>
+          <label class="avatar-upload-btn">
+            Change photo
+            <input type="file" id="avatarInput" accept="image/*" hidden />
+          </label>
+        </div>
+        <label>Display name<input id="editName" value="Your Name" /></label>
+        <label>Username<input id="editUsername" value="yourname" /></label>
+        <label>Bio<textarea id="editBio">Building. Creating. Sharing.</textarea></label>
       </div>
-      <div class="avatar-edit-section">
-        <div class="avatar profile-avatar-edit" id="editAvatarPreview">Y</div>
-        <label class="avatar-upload-btn">
-          Change photo
-          <input type="file" id="avatarInput" accept="image/*" hidden />
-        </label>
+      <div class="sheet-footer">
+        <button class="save-profile-btn" id="saveProfile" type="button">Save changes</button>
       </div>
-      <label>Display name<input id="editName" value="Your Name" /></label>
-      <label class="ob-cloud-row" style="margin-bottom:12px">
-        <input type="checkbox" id="editCloud" />
-        <span>Show ☁️ cloud mark on my name</span>
-      </label>
-      <label>Username<input id="editUsername" value="yourname" /></label>
-      <label>Bio<textarea id="editBio">Building. Creating. Sharing.</textarea></label>
-      <button class="save-profile-btn" id="saveProfile" type="button">Save changes</button>
     </div>
   </div>
 
-  <!-- LIGHTBOX -->
   <div class="modal hidden" id="imageLightbox">
     <div class="modal-backdrop" id="lightboxBackdrop"></div>
     <div class="lightbox-content">
@@ -475,7 +460,6 @@
     </div>
   </div>
 
-  <!-- POST OPTIONS -->
   <div class="modal hidden" id="postOptionsModal">
     <div class="modal-backdrop" id="postOptionsBackdrop"></div>
     <div class="post-options-sheet">
@@ -489,10 +473,10 @@
     </div>
   </div>
 
-  <!-- EDIT POST -->
   <div class="modal hidden" id="editPostModal">
     <div class="modal-backdrop" id="editPostBackdrop"></div>
-    <div class="edit-modal">
+    <div class="edit-modal sheet-modal">
+      <div class="sheet-handle"></div>
       <div class="modal-header">
         <div>
           <h2>Edit post</h2>
@@ -500,9 +484,11 @@
         </div>
         <button class="close-modal" id="closeEditPost" type="button">×</button>
       </div>
-      <textarea id="editPostText" maxlength="500" placeholder="What's on your mind?"></textarea>
-      <div class="create-preview" id="editPostPreview"></div>
-      <div class="create-bottom" style="margin-top:16px">
+      <div class="sheet-scroll">
+        <textarea id="editPostText" maxlength="500" placeholder="What's on your mind?"></textarea>
+        <div class="create-preview" id="editPostPreview"></div>
+      </div>
+      <div class="sheet-footer create-bottom">
         <span id="editPostCount">0 / 500</span>
         <button class="post-btn" id="saveEditPost" type="button">Save</button>
       </div>
@@ -512,7 +498,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase.js"></script>
   <script src="script.js"></script>
-
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () {
